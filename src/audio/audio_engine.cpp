@@ -525,10 +525,35 @@ void AudioEngine::sdl_audio_callback(void* userdata, Uint8* stream, int len) {
     auto* out = reinterpret_cast<float*>(stream);
     int frame_count = len / static_cast<int>(sizeof(float));
 
-    // Web demo: process effects on silence (no mic input by default).
-    // The DSP chain still runs. A real input would require getUserMedia.
-    std::memset(out, 0, static_cast<size_t>(len));
-    engine->process_audio(out, out, frame_count);
+    auto& cap = engine->capture_buffer_;
+    if (static_cast<int>(cap.size()) < frame_count)
+        cap.resize(static_cast<size_t>(frame_count), 0.0f);
+
+    if (engine->sdl_capture_device_ != 0) {
+        Uint32 queued = SDL_GetQueuedAudioSize(engine->sdl_capture_device_);
+        Uint32 need = static_cast<Uint32>(frame_count * sizeof(float));
+
+        // Drain excess to prevent latency buildup (keep at most 2 buffers ahead)
+        Uint32 max_queued = need * 2;
+        while (queued > max_queued) {
+            // Discard in small chunks to avoid any allocation
+            Uint8 junk[4096];
+            Uint32 chunk = (queued - need) > 4096 ? 4096 : (queued - need);
+            SDL_DequeueAudio(engine->sdl_capture_device_, junk, chunk);
+            queued -= chunk;
+        }
+
+        Uint32 got = SDL_DequeueAudio(engine->sdl_capture_device_,
+                                      cap.data(), need);
+        int captured = static_cast<int>(got / sizeof(float));
+        if (captured < frame_count)
+            std::memset(cap.data() + captured, 0,
+                        static_cast<size_t>(frame_count - captured) * sizeof(float));
+    } else {
+        std::memset(cap.data(), 0, static_cast<size_t>(frame_count) * sizeof(float));
+    }
+
+    engine->process_audio(cap.data(), out, frame_count);
 }
 
 bool AudioEngine::initialize() {
@@ -552,42 +577,113 @@ void AudioEngine::shutdown() {
 bool AudioEngine::start() {
     if (!initialized_ || running_) return false;
 
-    // Web Audio createScriptProcessor requires buffer size 256–16384
-    int web_buffer = buffer_size_ < 256 ? 256 : buffer_size_;
+    // Web Audio needs buffer 256–16384; use 1024 for glitch-free playback (~21ms at 48kHz)
+    int web_buffer = 1024;
 
-    SDL_AudioSpec want, have;
-    SDL_memset(&want, 0, sizeof(want));
-    want.freq = sample_rate_;
-    want.format = AUDIO_F32;
-    want.channels = 1;
-    want.samples = static_cast<Uint16>(web_buffer);
-    want.callback = sdl_audio_callback;
-    want.userdata = this;
+    // --- Open output (playback) device with callback ---
+    SDL_AudioSpec want_out, have_out;
+    SDL_memset(&want_out, 0, sizeof(want_out));
+    want_out.freq = sample_rate_;
+    want_out.format = AUDIO_F32;
+    want_out.channels = 1;
+    want_out.samples = static_cast<Uint16>(web_buffer);
+    want_out.callback = sdl_audio_callback;
+    want_out.userdata = this;
 
-    sdl_audio_device_ = SDL_OpenAudioDevice(nullptr, 0, &want, &have, 0);
+    // Allow frequency change so browser uses its native sample rate (no resampling artifacts)
+    sdl_audio_device_ = SDL_OpenAudioDevice(nullptr, 0, &want_out, &have_out,
+                                            SDL_AUDIO_ALLOW_FREQUENCY_CHANGE);
     if (sdl_audio_device_ == 0) {
-        std::cerr << "[Web] Failed to open audio: " << SDL_GetError() << std::endl;
+        std::cerr << "[Web] Failed to open output audio: " << SDL_GetError() << std::endl;
         return false;
     }
 
-    sample_rate_ = have.freq;
-    buffer_size_ = have.samples;
+    sample_rate_ = have_out.freq;
+    buffer_size_ = have_out.samples;
 
-    SDL_PauseAudioDevice(sdl_audio_device_, 0);  // start playback
+    // Update all effects with the actual sample rate the browser gave us
+    {
+        std::lock_guard<std::mutex> lock(effect_mutex_);
+        for (auto& fx : effects_)
+            fx->set_sample_rate(sample_rate_);
+    }
+
+    // --- Open capture (microphone) device ---
+    // Enumerate capture devices and prefer USB/external audio interfaces
+    SDL_AudioSpec want_cap, have_cap;
+    SDL_memset(&want_cap, 0, sizeof(want_cap));
+    want_cap.freq = sample_rate_;
+    want_cap.format = AUDIO_F32;
+    want_cap.channels = 1;
+    want_cap.samples = static_cast<Uint16>(web_buffer);
+    want_cap.callback = nullptr;  // use SDL_DequeueAudio for capture
+
+    // Keywords matching USB guitar cables / audio interfaces
+    static const char* usb_keywords[] = {
+        "usb", "guitar", "irig", "scarlett", "behringer", "focusrite",
+        "presonus", "steinberg", "audio interface", "line 6", "rocksmith",
+        "umc", "um2", "uphoria", "podcast", "xenyx", "external"
+    };
+
+    const char* preferred_device = nullptr;
+    int num_capture = SDL_GetNumAudioDevices(1);
+    std::cout << "[Web] Found " << num_capture << " capture device(s):" << std::endl;
+    for (int i = 0; i < num_capture; ++i) {
+        const char* name = SDL_GetAudioDeviceName(i, 1);
+        if (!name) continue;
+        std::cout << "  [" << i << "] " << name << std::endl;
+
+        // Check if this looks like an external audio interface
+        std::string lower = name;
+        std::transform(lower.begin(), lower.end(), lower.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        for (const auto* kw : usb_keywords) {
+            if (lower.find(kw) != std::string::npos) {
+                preferred_device = name;
+                std::cout << "  >> Preferred (matches '" << kw << "')" << std::endl;
+                break;
+            }
+        }
+        if (preferred_device) break;
+    }
+
+    sdl_capture_device_ = SDL_OpenAudioDevice(preferred_device, 1, &want_cap, &have_cap,
+                                                SDL_AUDIO_ALLOW_FREQUENCY_CHANGE);
+    if (sdl_capture_device_ == 0) {
+        std::cerr << "[Web] Warning: No microphone available: " << SDL_GetError() << std::endl;
+        // Continue without mic — effects still run on silence
+    }
+
+    // Pre-allocate capture buffer
+    capture_buffer_.resize(static_cast<size_t>(buffer_size_), 0.0f);
+
+    // Unpause both devices
+    SDL_PauseAudioDevice(sdl_audio_device_, 0);
+    if (sdl_capture_device_ != 0)
+        SDL_PauseAudioDevice(sdl_capture_device_, 0);
+
     running_ = true;
 
     std::cout << "[Web] Audio stream started:" << std::endl;
     std::cout << "  Rate:   " << sample_rate_ << " Hz" << std::endl;
     std::cout << "  Buffer: " << buffer_size_ << " samples" << std::endl;
+    std::cout << "  Mic:    " << (sdl_capture_device_ ? "yes" : "unavailable") << std::endl;
     return true;
 }
 
 void AudioEngine::stop() {
-    if (sdl_audio_device_ != 0) {
-        if (running_) {
+    if (running_) {
+        if (sdl_audio_device_ != 0)
             SDL_PauseAudioDevice(sdl_audio_device_, 1);
-            running_ = false;
-        }
+        if (sdl_capture_device_ != 0)
+            SDL_PauseAudioDevice(sdl_capture_device_, 1);
+        running_ = false;
+    }
+    if (sdl_capture_device_ != 0) {
+        SDL_CloseAudioDevice(sdl_capture_device_);
+        sdl_capture_device_ = 0;
+    }
+    if (sdl_audio_device_ != 0) {
         SDL_CloseAudioDevice(sdl_audio_device_);
         sdl_audio_device_ = 0;
     }

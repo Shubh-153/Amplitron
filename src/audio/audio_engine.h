@@ -100,6 +100,8 @@ private:
 #else
     static void sdl_audio_callback(void* userdata, Uint8* stream, int len);
     SDL_AudioDeviceID sdl_audio_device_ = 0;
+    SDL_AudioDeviceID sdl_capture_device_ = 0;
+    std::vector<float> capture_buffer_;
 #endif
     bool initialized_ = false;
     bool running_ = false;
