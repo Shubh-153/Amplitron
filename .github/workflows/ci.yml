@@ -24,6 +24,11 @@ jobs:
     - name: Setup ImGui
       run: git clone --depth 1 --branch v1.90.1 https://github.com/ocornut/imgui.git external/imgui
 
+    - name: Setup NanoSVG
+      run: |
+        curl -sL -o external/nanosvg.h https://raw.githubusercontent.com/memononen/nanosvg/master/src/nanosvg.h
+        curl -sL -o external/nanosvgrast.h https://raw.githubusercontent.com/memononen/nanosvg/master/src/nanosvgrast.h
+
     - name: Build
       run: |
         mkdir -p build && cd build
@@ -52,6 +57,11 @@ jobs:
 
     - name: Setup ImGui
       run: git clone --depth 1 --branch v1.90.1 https://github.com/ocornut/imgui.git external/imgui
+
+    - name: Setup NanoSVG
+      run: |
+        curl -sL -o external/nanosvg.h https://raw.githubusercontent.com/memononen/nanosvg/master/src/nanosvg.h
+        curl -sL -o external/nanosvgrast.h https://raw.githubusercontent.com/memononen/nanosvg/master/src/nanosvgrast.h
 
     - name: Build
       run: |
@@ -152,6 +162,11 @@ jobs:
     - name: Setup ImGui
       run: git clone --depth 1 --branch v1.90.1 https://github.com/ocornut/imgui.git external/imgui
 
+    - name: Setup NanoSVG
+      run: |
+        curl -sL -o external/nanosvg.h https://raw.githubusercontent.com/memononen/nanosvg/master/src/nanosvg.h
+        curl -sL -o external/nanosvgrast.h https://raw.githubusercontent.com/memononen/nanosvg/master/src/nanosvgrast.h
+
     - name: Build WASM
       run: |
         mkdir -p build-web && cd build-web
@@ -195,6 +210,12 @@ jobs:
     - name: Setup ImGui
       shell: msys2 {0}
       run: git clone --depth 1 --branch v1.90.1 https://github.com/ocornut/imgui.git external/imgui
+
+    - name: Setup NanoSVG
+      shell: msys2 {0}
+      run: |
+        curl -sL -o external/nanosvg.h https://raw.githubusercontent.com/memononen/nanosvg/master/src/nanosvg.h
+        curl -sL -o external/nanosvgrast.h https://raw.githubusercontent.com/memononen/nanosvg/master/src/nanosvgrast.h
 
     - name: Build
       shell: msys2 {0}
