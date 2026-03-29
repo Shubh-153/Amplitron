@@ -8,9 +8,9 @@ static const int ALLPASS_LENGTHS[] = {556, 441};
 
 Reverb::Reverb() {
     params_ = {
-        {"Decay",  0.6f, 0.1f, 0.99f, 0.6f, ""},
-        {"Damp",   0.4f, 0.0f, 1.0f,  0.4f, ""},
-        {"Level",  0.3f, 0.0f, 1.0f,  0.3f, ""},
+        {"Decay",  0.6f, 0.1f, 0.99f, 0.6f, "", "Length of the reverb tail. Higher values simulate larger acoustic spaces like halls or caves."},
+        {"Damp",   0.4f, 0.0f, 1.0f,  0.4f, "", "High-frequency damping. Higher values absorb treble faster, simulating softer room materials."},
+        {"Level",  0.3f, 0.0f, 1.0f,  0.3f, "", "Mix volume of the reverb effect. Controls how wet or distant the overall sound feels."},
     };
     init_filters();
 }

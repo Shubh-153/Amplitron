@@ -4,11 +4,11 @@ namespace GuitarAmp {
 
 Compressor::Compressor() {
     params_ = {
-        {"Threshold", -20.0f, -60.0f,  0.0f, -20.0f, "dB"},
-        {"Ratio",       4.0f,   1.0f, 20.0f,   4.0f, ":1"},
-        {"Attack",      5.0f,   0.1f, 50.0f,   5.0f, "ms"},
-        {"Release",   100.0f,  10.0f, 500.0f, 100.0f, "ms"},
-        {"Makeup",      0.0f,   0.0f, 30.0f,   0.0f, "dB"},
+        {"Threshold", -20.0f, -60.0f,  0.0f, -20.0f, "dB", "Signal level at which compression begins. Signals above this level will be reduced in volume."},
+        {"Ratio",       4.0f,   1.0f, 20.0f,   4.0f, ":1", "How strongly to reduce peaks that exceed the threshold. Higher values create a more squashed sound."},
+        {"Attack",      5.0f,   0.1f, 50.0f,   5.0f, "ms", "How quickly the compressor reacts to peaks. Fast attack clamps down immediately, slow allows pick transients through."},
+        {"Release",   100.0f,  10.0f, 500.0f, 100.0f, "ms", "How quickly the compressor stops reducing volume after the signal drops below threshold."},
+        {"Makeup",      0.0f,   0.0f, 30.0f,   0.0f, "dB", "Gain boost applied after compression to compensate for the volume lost during peak reduction."},
     };
 }
 

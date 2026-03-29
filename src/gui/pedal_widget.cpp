@@ -1,4 +1,5 @@
 #include "gui/pedal_widget.h"
+#include "audio/audio_engine.h"
 #include "gui/theme.h"
 #include "gui/command.h"
 #include "gui/command_history.h"
@@ -10,8 +11,8 @@
 namespace GuitarAmp {
 
 /** @brief Construct PedalWidget and look up color scheme for the effect type. */
-PedalWidget::PedalWidget(std::shared_ptr<Effect> effect, int index)
-    : effect_(std::move(effect)), index_(index) {
+PedalWidget::PedalWidget(AudioEngine& engine, std::shared_ptr<Effect> effect, int index)
+    : engine_(engine), effect_(std::move(effect)), index_(index) {
     assign_colors();
 }
 
@@ -282,10 +283,16 @@ bool PedalWidget::render() {
             ImGui::SetCursorScreenPos(ImVec2(cx - ml_size.x * 0.5f, display_y));
             ImGui::InvisibleButton("##tuner_mute_toggle", ml_size);
             if (ImGui::IsItemClicked()) {
-                effect_->params()[0].value = mute_on ? 0.0f : 1.0f;
+                float new_val = mute_on ? 0.0f : 1.0f;
+                effect_->params()[0].value = new_val;
+                engine_.push_param_change(index_, 0, new_val);
             }
             if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("Click to toggle mute");
+                if (!effect_->params()[0].tooltip.empty()) {
+                    ImGui::SetTooltip("Click to toggle mute\n\n%s", effect_->params()[0].tooltip.c_str());
+                } else {
+                    ImGui::SetTooltip("Click to toggle mute");
+                }
             }
         }
     }
@@ -381,8 +388,11 @@ bool PedalWidget::render() {
                 if (ImGui::GetIO().KeyShift) value_delta *= 0.2f;
                 if (ImGui::GetIO().KeyCtrl)  value_delta *= 3.0f;
 
-                params[pi].value = clamp(params[pi].value + value_delta,
-                                        params[pi].min_val, params[pi].max_val);
+                float new_val = clamp(params[pi].value + value_delta, params[pi].min_val, params[pi].max_val);
+                if (new_val != params[pi].value) {
+                    params[pi].value = new_val;
+                    engine_.push_param_change(index_, pi, new_val);
+                }
             }
         }
 
@@ -406,19 +416,23 @@ bool PedalWidget::render() {
             float old_val = params[pi].value;
             float step = range * 0.03f;
             if (ImGui::GetIO().KeyShift) step *= 0.2f;
-            params[pi].value = clamp(params[pi].value + ImGui::GetIO().MouseWheel * step,
+            float new_val = clamp(params[pi].value + ImGui::GetIO().MouseWheel * step,
                                     params[pi].min_val, params[pi].max_val);
-            if (params[pi].value != old_val) {
-                commit_param_change(pi, old_val, params[pi].value);
+            if (new_val != old_val) {
+                params[pi].value = new_val;
+                engine_.push_param_change(index_, pi, new_val);
+                commit_param_change(pi, old_val, new_val);
             }
         }
 
         // Double-click to reset
         if (is_hovered && ImGui::IsMouseDoubleClicked(0)) {
             float old_val = params[pi].value;
-            params[pi].value = params[pi].default_val;
-            if (params[pi].value != old_val) {
-                commit_param_change(pi, old_val, params[pi].value);
+            float new_val = params[pi].default_val;
+            if (new_val != old_val) {
+                params[pi].value = new_val;
+                engine_.push_param_change(index_, pi, new_val);
+                commit_param_change(pi, old_val, new_val);
             }
         }
 
@@ -437,15 +451,18 @@ bool PedalWidget::render() {
             }
             if (ImGui::IsItemDeactivatedAfterEdit() && popup_active_param_index_ == pi) {
                 if (params[pi].value != popup_param_value_before_edit_) {
+                    engine_.push_param_change(index_, pi, params[pi].value);
                     commit_param_change(pi, popup_param_value_before_edit_, params[pi].value);
                 }
                 popup_active_param_index_ = -1;
             }
             if (ImGui::Button("Reset")) {
                 float old_val = params[pi].value;
-                params[pi].value = params[pi].default_val;
-                if (params[pi].value != old_val) {
-                    commit_param_change(pi, old_val, params[pi].value);
+                float new_val = params[pi].default_val;
+                if (new_val != old_val) {
+                    params[pi].value = new_val;
+                    engine_.push_param_change(index_, pi, new_val);
+                    commit_param_change(pi, old_val, new_val);
                 }
                 ImGui::CloseCurrentPopup();
             }
@@ -503,8 +520,13 @@ bool PedalWidget::render() {
 
         // Tooltip
         if (is_hovered || is_active) {
-            ImGui::SetTooltip("%s: %.2f %s\nRotate or drag to adjust\nScroll wheel also works\nShift=fine  Ctrl=coarse\nDbl-click=reset  Right-click=edit",
-                params[pi].name.c_str(), params[pi].value, params[pi].unit.c_str());
+            if (params[pi].tooltip.empty()) {
+                ImGui::SetTooltip("%s: %.2f %s\nRange: [%.2f, %.2f]\n\nRotate or drag to adjust\nScroll wheel also works\nShift=fine  Ctrl=coarse\nDbl-click=reset  Right-click=edit",
+                    params[pi].name.c_str(), params[pi].value, params[pi].unit.c_str(), params[pi].min_val, params[pi].max_val);
+            } else {
+                ImGui::SetTooltip("%s: %.2f %s\nRange: [%.2f, %.2f]\n\n%s\n\nRotate or drag to adjust\nScroll wheel also works\nShift=fine  Ctrl=coarse\nDbl-click=reset  Right-click=edit",
+                    params[pi].name.c_str(), params[pi].value, params[pi].unit.c_str(), params[pi].min_val, params[pi].max_val, params[pi].tooltip.c_str());
+            }
         }
 
         // Parameter name below knob (centered)
@@ -548,7 +570,9 @@ bool PedalWidget::render() {
 
         ImGui::InvisibleButton("##switch", ImVec2(50, 30));
         if (ImGui::IsItemClicked()) {
-            effect_->set_enabled(!enabled);
+            bool new_enabled = !enabled;
+            effect_->set_enabled(new_enabled);
+            engine_.push_effect_enabled(index_, new_enabled ? 1.0f : 0.0f);
         }
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip(enabled ? "Click to bypass" : "Click to enable");
@@ -579,7 +603,7 @@ bool PedalWidget::render() {
 void PedalWidget::commit_param_change(int param_index, float old_val, float new_val) {
     if (!history_) return;
     auto cmd = std::make_unique<ParameterChangeCommand>(
-        effect_, param_index, old_val, new_val);
+        engine_, effect_, param_index, old_val, new_val);
     history_->push_executed(std::move(cmd));
 }
 

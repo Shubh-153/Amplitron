@@ -4,9 +4,9 @@ namespace GuitarAmp {
 
 Overdrive::Overdrive() {
     params_ = {
-        {"Drive",  1.5f,  1.0f, 10.0f, 1.5f, "x"},
-        {"Tone",   0.7f,  0.0f,  1.0f, 0.7f, ""},
-        {"Level",  0.7f,  0.0f,  1.0f, 0.7f, ""},
+        {"Drive",  1.5f,  1.0f, 10.0f, 1.5f, "x", "Amount of input gain pushing into soft-clipping. Increases harmonic saturation and sustain."},
+        {"Tone",   0.7f,  0.0f,  1.0f, 0.7f, "", "Adjusts high-frequency content. Lower values are darker and smoother, higher values are brighter and more biting."},
+        {"Level",  0.7f,  0.0f,  1.0f, 0.7f, "", "Master output volume of the pedal to compensate for the gain added by the Drive control."},
     };
 }
 

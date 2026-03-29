@@ -4,9 +4,9 @@ namespace GuitarAmp {
 
 Chorus::Chorus() {
     params_ = {
-        {"Rate",   1.5f, 0.1f, 10.0f, 1.5f, "Hz"},
-        {"Depth",  5.0f, 0.5f, 20.0f, 5.0f, "ms"},
-        {"Level",  0.5f, 0.0f,  1.0f, 0.5f, ""},
+        {"Rate",   1.5f, 0.1f, 10.0f, 1.5f, "Hz", "Speed of the modulation sweep. Higher values create faster wobbling effects."},
+        {"Depth",  5.0f, 0.5f, 20.0f, 5.0f, "ms", "Intensity of the modulation. Higher values create a deeper, more pronounced pitch shift."},
+        {"Level",  0.5f, 0.0f,  1.0f, 0.5f, "", "Mix volume of the chorus effect. 0 is dry, 1 is fully wet."},
     };
     set_sample_rate(DEFAULT_SAMPLE_RATE);
 }

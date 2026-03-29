@@ -3,7 +3,11 @@ build/
 build-*/
 out/
 cmake-build-*/
-presets/
+presets/*
+!presets/01_Sparkling_Clean.json
+!presets/02_Classic_Rock_Crunch.json
+!presets/03_Modern_Metal_Lead.json
+!presets/04_Ambient_Swells.json
 recordings/
 
 # IDE

@@ -111,12 +111,12 @@ const std::vector<AmpModel>& get_amp_models() {
 AmpSimulator::AmpSimulator() {
     float max_model = static_cast<float>(get_amp_models().size() - 1);
     params_ = {
-        {"Model", 0.0f, 0.0f, max_model, 0.0f, ""},     // Amp model selector
-        {"Gain",  0.5f, 0.0f, 1.0f, 0.5f, ""},           // Extra gain control
-        {"Bass",  0.0f, -6.0f, 6.0f, 0.0f, "dB"},        // Tone stack trim
-        {"Mid",   0.0f, -6.0f, 6.0f, 0.0f, "dB"},        // Tone stack trim
-        {"Treble", 0.0f, -6.0f, 6.0f, 0.0f, "dB"},       // Tone stack trim
-        {"Level", 0.7f, 0.0f, 1.0f, 0.7f, ""},           // Master output level
+        {"Model", 0.0f, 0.0f, max_model, 0.0f, "", "Selects the amplifier model. Each model has unique EQ curves, gain staging, and clipping characteristics."},
+        {"Gain",  0.5f, 0.0f, 1.0f, 0.5f, "", "Preamp gain control. Drives the virtual tubes harder for more compression and distortion."},
+        {"Bass",  0.0f, -6.0f, 6.0f, 0.0f, "dB", "Pre-distortion low-frequency trim. Adjusts the fatness and punch of the amplifier."},
+        {"Mid",   0.0f, -6.0f, 6.0f, 0.0f, "dB", "Pre-distortion mid-frequency trim. Controls the core voice and 'bark' of the amplifier."},
+        {"Treble", 0.0f, -6.0f, 6.0f, 0.0f, "dB", "Pre-distortion high-frequency trim. Adjusts the brightness and bite before clipping."},
+        {"Level", 0.7f, 0.0f, 1.0f, 0.7f, "", "Master output volume of the amplifier. Does not affect the amount of distortion."},
     };
     set_sample_rate(DEFAULT_SAMPLE_RATE);
 }

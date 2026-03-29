@@ -326,6 +326,10 @@ bool GuiManager::initialize(int width, int height) {
 
     pedal_board_ = std::make_unique<PedalBoard>(engine_, command_history_);
 
+#ifndef EMSCRIPTEN
+    update_check_thread_ = std::thread([this]() { this->check_for_updates(); });
+#endif
+
     initialized_ = true;
     return true;
 }
@@ -333,6 +337,10 @@ bool GuiManager::initialize(int width, int height) {
 void GuiManager::shutdown() {
     if (!initialized_) return;
     initialized_ = false;
+
+    if (update_check_thread_.joinable()) {
+        update_check_thread_.join();
+    }
 
     engine_.clear_tuner_tap();
     pedal_board_.reset();
@@ -701,6 +709,39 @@ void GuiManager::render_menu_bar() {
         }
         ImGui::SameLine();
         ImGui::Text("%dHz", engine_.get_sample_rate());
+
+        bool show_update = false;
+        std::string update_version;
+        std::string update_url;
+        {
+            std::lock_guard<std::mutex> lock(update_mutex_);
+            if (has_new_release_) {
+                show_update = true;
+                update_version = new_release_version_;
+                update_url = new_release_url_;
+            }
+        }
+
+        if (show_update) {
+            ImGui::SameLine(bar_w - 600);
+            ImGui::TextColored(Theme::GoldHot(), "New Release: %s", update_version.c_str());
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Click to open release in browser");
+                ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+            }
+            if (ImGui::IsItemClicked()) {
+#if defined(_WIN32)
+                std::string cmd = "start " + update_url;
+                std::system(cmd.c_str());
+#elif defined(__APPLE__)
+                std::string cmd = "open " + update_url;
+                std::system(cmd.c_str());
+#elif defined(__linux__)
+                std::string cmd = "xdg-open " + update_url;
+                std::system(cmd.c_str());
+#endif
+            }
+        }
 
         ImGui::EndMainMenuBar();
     }
@@ -1382,6 +1423,88 @@ void GuiManager::render_tuner_modal() {
     }
 
     ImGui::End();
+}
+
+void GuiManager::check_for_updates() {
+#ifndef EMSCRIPTEN
+    FILE* pipe = nullptr;
+#ifdef _WIN32
+    pipe = _popen("curl -s https://api.github.com/repos/sudip-mondal-2002/Amplitron/releases", "r");
+#else
+    pipe = popen("curl -s https://api.github.com/repos/sudip-mondal-2002/Amplitron/releases", "r");
+#endif
+
+    if (!pipe) return;
+
+    std::string result = "";
+    char buffer[256];
+    while (!feof(pipe)) {
+        if (fgets(buffer, 256, pipe) != nullptr)
+            result += buffer;
+    }
+#ifdef _WIN32
+    _pclose(pipe);
+#else
+    pclose(pipe);
+#endif
+
+    std::string search_str = "\"tag_name\": \"";
+    size_t pos = result.find(search_str);
+    if (pos != std::string::npos) {
+        pos += search_str.length();
+        size_t end_pos = result.find("\"", pos);
+        if (end_pos != std::string::npos) {
+            std::string latest_version = result.substr(pos, end_pos - pos);
+            
+            std::string html_url = "";
+            std::string url_search_str = "\"html_url\": \"";
+            size_t url_pos = result.find(url_search_str);
+            if (url_pos != std::string::npos) {
+                url_pos += url_search_str.length();
+                size_t url_end_pos = result.find("\"", url_pos);
+                if (url_end_pos != std::string::npos) {
+                    html_url = result.substr(url_pos, url_end_pos - url_pos);
+                }
+            }
+
+            // Parse version strings and compare numerically
+            auto parse_version = [](const std::string& v) -> std::vector<int> {
+                std::vector<int> parts;
+                std::string s = v;
+                if (!s.empty() && s[0] == 'v') s = s.substr(1);
+                size_t pos = 0;
+                while (pos < s.size()) {
+                    size_t dot = s.find('.', pos);
+                    if (dot == std::string::npos) dot = s.size();
+                    try { parts.push_back(std::stoi(s.substr(pos, dot - pos))); }
+                    catch (...) { parts.push_back(0); }
+                    pos = dot + 1;
+                }
+                return parts;
+            };
+
+            std::string current_version = "v" AMPLITRON_VERSION;
+            if (!latest_version.empty()) {
+                auto latest_parts = parse_version(latest_version);
+                auto current_parts = parse_version(current_version);
+                bool is_newer = false;
+                size_t max_len = std::max(latest_parts.size(), current_parts.size());
+                for (size_t i = 0; i < max_len; ++i) {
+                    int lv = (i < latest_parts.size()) ? latest_parts[i] : 0;
+                    int cv = (i < current_parts.size()) ? current_parts[i] : 0;
+                    if (lv > cv) { is_newer = true; break; }
+                    if (lv < cv) { break; }
+                }
+                if (is_newer) {
+                    std::lock_guard<std::mutex> lock(update_mutex_);
+                    new_release_version_ = latest_version;
+                    new_release_url_ = html_url;
+                    has_new_release_ = true;
+                }
+            }
+        }
+    }
+#endif
 }
 
 } // namespace GuitarAmp

@@ -11,6 +11,7 @@ struct EffectParam {
     float max_val;
     float default_val;
     std::string unit;
+    std::string tooltip;
 };
 
 class Effect {

@@ -4,10 +4,10 @@ namespace GuitarAmp {
 
 Equalizer::Equalizer() {
     params_ = {
-        {"Bass",    0.0f, -12.0f, 12.0f, 0.0f, "dB"},
-        {"Mid",     0.0f, -12.0f, 12.0f, 0.0f, "dB"},
-        {"Treble",  0.0f, -12.0f, 12.0f, 0.0f, "dB"},
-        {"Presence", 0.0f, -12.0f, 12.0f, 0.0f, "dB"},
+        {"Bass",    0.0f, -12.0f, 12.0f, 0.0f, "dB", "Low shelf filter (200Hz). Boosts or cuts the heavy low-end thud and body of the tone."},
+        {"Mid",     0.0f, -12.0f, 12.0f, 0.0f, "dB", "Bell filter (800Hz). Boosts for leads that cut through a mix, cuts for a hollow metal rhythm tone."},
+        {"Treble",  0.0f, -12.0f, 12.0f, 0.0f, "dB", "High shelf filter (3kHz). Adjusts the bite, pick attack, and overall brightness."},
+        {"Presence", 0.0f, -12.0f, 12.0f, 0.0f, "dB", "Ultra-high frequency contour. Adds 'air' and glassiness to the very top end."},
     };
     set_sample_rate(DEFAULT_SAMPLE_RATE);
 }

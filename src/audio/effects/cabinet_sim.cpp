@@ -4,8 +4,8 @@ namespace GuitarAmp {
 
 CabinetSim::CabinetSim() {
     params_ = {
-        {"Type",    0.0f, 0.0f, 2.0f, 0.0f, ""},  // 0=1x12, 1=2x12, 2=4x12
-        {"Bright",  0.5f, 0.0f, 1.0f, 0.5f, ""},
+        {"Type",    0.0f, 0.0f, 2.0f, 0.0f, "", "Speaker cabinet type. 0 = 1x12 (bright/focused), 1 = 2x12 (balanced), 2 = 4x12 (huge low-end)."},
+        {"Bright",  0.5f, 0.0f, 1.0f, 0.5f, "", "Simulates microphone placement. Higher values add a high-frequency resonance peak for more cut."},
     };
 
     // Default LP at ~5kHz (speaker rolloff)

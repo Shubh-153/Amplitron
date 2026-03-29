@@ -4,10 +4,10 @@ namespace GuitarAmp {
 
 Delay::Delay() {
     params_ = {
-        {"Time",     350.0f, 10.0f, 2000.0f, 350.0f, "ms"},
-        {"Feedback",   0.4f,  0.0f,    0.95f,  0.4f, ""},
-        {"Tone",       0.7f,  0.0f,    1.0f,   0.7f, ""},
-        {"Level",      0.5f,  0.0f,    1.0f,   0.5f, ""},
+        {"Time",     350.0f, 10.0f, 2000.0f, 350.0f, "ms", "Time interval between each echo. Sets the tempo of the delay repeats."},
+        {"Feedback",   0.4f,  0.0f,    0.95f,  0.4f, "", "Amount of the delayed signal fed back into the input. Higher values create more repeats."},
+        {"Tone",       0.7f,  0.0f,    1.0f,   0.7f, "", "High-frequency damping on the repeats. Lower values create darker, tape-like echoes."},
+        {"Level",      0.5f,  0.0f,    1.0f,   0.5f, "", "Mix volume of the delay repeats added to your dry signal."},
     };
     set_sample_rate(DEFAULT_SAMPLE_RATE);
 }

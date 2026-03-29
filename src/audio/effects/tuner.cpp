@@ -17,8 +17,8 @@ const char* TunerPedal::note_name(int note_index) {
 
 TunerPedal::TunerPedal() {
     params_ = {
-        {"Mute",    1.0f, 0.0f, 1.0f, 1.0f, ""},       // 0 = pass audio, 1 = mute when active
-        {"A4 Ref", 440.0f, 430.0f, 450.0f, 440.0f, "Hz"}, // Reference pitch for A4
+        {"Mute",    1.0f, 0.0f, 1.0f, 1.0f, "", "When fully engaged (1.0), the tuner silences the audio output while you tune."},
+        {"A4 Ref", 440.0f, 430.0f, 450.0f, 440.0f, "Hz", "Calibration frequency for the note A4. Default is standard 440Hz."},
     };
     yin_buffer_.resize(YIN_BUFFER_SIZE, 0.0f);
     yin_buf_.resize(YIN_BUFFER_SIZE, 0.0f);
