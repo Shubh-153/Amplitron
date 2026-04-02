@@ -156,9 +156,6 @@ void AudioEngine::process_audio(const float* input, float* output, int frame_cou
         process_buffer_.resize(frame_count, 0.0f);
     }
 
-    // Drain lock-free command queue (GUI -> Audio)
-    drain_commands();
-
     // Single branch: read once per callback, not per sample.
     const bool analyzer_on = analyzer_enabled_.load(std::memory_order_relaxed);
 
@@ -197,6 +194,9 @@ void AudioEngine::process_audio(const float* input, float* output, int frame_cou
     // Structural changes (add/remove/move) still use try_lock for safety;
     // parameter changes are fully lock-free via the SPSC queue above.
     if (effect_mutex_.try_lock()) {
+        // Drain lock-free command queue (GUI -> Audio) while holding the lock
+        // so that effects_ is not accessed concurrently with add/remove/move.
+        drain_commands();
         // Tuner tap: pre-chain pitch detection, optionally mutes signal
         if (tuner_tap_ && tuner_tap_->is_enabled()) {
             tuner_tap_->process(process_buffer_.data(), frame_count);
