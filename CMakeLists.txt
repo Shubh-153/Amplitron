@@ -24,14 +24,18 @@ elseif(MSVC)
 else()
     add_compile_options(-Wall -Wextra -ffast-math)
     if(CMAKE_BUILD_TYPE STREQUAL "Release")
-        add_compile_options(-O3 -march=native -ftree-vectorize)
+        add_compile_options(-O3 -ftree-vectorize)
+        # -march=native is only valid for native (non-cross) builds
+        if(NOT ANDROID AND NOT IOS AND NOT EMSCRIPTEN)
+            add_compile_options(-march=native)
+        endif()
     endif()
 endif()
 
 # --- Dependencies ---
 # Emscripten provides SDL2, OpenGL ES, and audio via built-in ports.
 # Native builds find PortAudio, SDL2, and OpenGL from the system.
-if(NOT EMSCRIPTEN)
+if(NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
 
 # PortAudio
 find_package(PkgConfig QUIET)
@@ -74,7 +78,7 @@ endif()
 # OpenGL
 find_package(OpenGL REQUIRED)
 
-endif() # NOT EMSCRIPTEN
+endif() # NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS
 
 # --- Dear ImGui (bundled) ---
 set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/external/imgui)
@@ -128,17 +132,36 @@ set(APP_SOURCES
 )
 
 # --- Platform-specific sources (selected at configure time) ---
-if(EMSCRIPTEN)
-    set(BACKEND_SOURCES  src/audio/audio_backend_sdl.cpp)
-    set(DIALOG_SOURCES   src/gui/file_dialog_web.cpp)
+# Mobile (Android/iOS) and Web use SDL audio backend + stub file dialog
+if(EMSCRIPTEN OR ANDROID OR IOS)
+    set(BACKEND_SOURCES src/audio/audio_backend_sdl.cpp)
+    set(DIALOG_SOURCES  src/gui/file_dialog_web.cpp)
 else()
-    set(BACKEND_SOURCES  src/audio/audio_backend_portaudio.cpp)
-    set(DIALOG_SOURCES   src/gui/file_dialog_native.cpp)
+    set(BACKEND_SOURCES src/audio/audio_backend_portaudio.cpp)
+    set(DIALOG_SOURCES  src/gui/file_dialog_native.cpp)
 endif()
 
 # =============================================================================
 # Target configuration: Emscripten (web) vs Native (desktop)
 # =============================================================================
+# =============================================================================
+# Shared helper: fetch SDL2 from source for mobile builds (Android / iOS)
+# =============================================================================
+if(ANDROID OR IOS)
+    include(FetchContent)
+    FetchContent_Declare(SDL2
+        GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+        GIT_TAG        release-2.30.12
+        GIT_SHALLOW    TRUE
+    )
+    # Build SDL2 as a static library so we ship a single .so / .a
+    set(SDL_STATIC  ON  CACHE BOOL "" FORCE)
+    set(SDL_SHARED  OFF CACHE BOOL "" FORCE)
+    # Suppress SDL2's own test / example targets
+    set(SDL_TEST    OFF CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(SDL2)
+endif()
+
 if(EMSCRIPTEN)
 
     # --- Emscripten / WebAssembly build ---
@@ -186,7 +209,88 @@ if(EMSCRIPTEN)
             "$<TARGET_FILE_DIR:Amplitron>/coi-serviceworker.js"
     )
 
-else() # NOT EMSCRIPTEN
+elseif(ANDROID)
+
+    # --- Android build: shared library loaded by SDLActivity via JNI ---
+    # SDL2 is linked statically so only libmain.so needs to be packaged.
+    # AmplitronActivity.java overrides getLibraries() to load only "main".
+    add_library(main SHARED
+        ${APP_SOURCES}
+        ${BACKEND_SOURCES}
+        ${DIALOG_SOURCES}
+        ${IMGUI_SOURCES}
+    )
+
+    target_include_directories(main PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/external
+        ${IMGUI_DIR}
+        ${IMGUI_DIR}/backends
+        ${SDL2_SOURCE_DIR}/include
+    )
+
+    target_compile_definitions(main PRIVATE
+        IMGUI_IMPL_OPENGL_ES3
+        AMPLITRON_VERSION="${AMPLITRON_VERSION}"
+    )
+
+    target_link_libraries(main PRIVATE
+        SDL2::SDL2-static
+        android
+        log
+        EGL
+        GLESv3
+    )
+
+elseif(IOS)
+
+    # --- iOS build: application bundle, SDL2 statically linked ---
+    add_executable(Amplitron MACOSX_BUNDLE
+        ${APP_SOURCES}
+        ${BACKEND_SOURCES}
+        ${DIALOG_SOURCES}
+        ${IMGUI_SOURCES}
+    )
+
+    target_include_directories(Amplitron PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/external
+        ${IMGUI_DIR}
+        ${IMGUI_DIR}/backends
+        ${SDL2_SOURCE_DIR}/include
+    )
+
+    target_compile_definitions(Amplitron PRIVATE
+        IMGUI_IMPL_OPENGL_ES3
+        AMPLITRON_VERSION="${AMPLITRON_VERSION}"
+    )
+
+    target_link_libraries(Amplitron PRIVATE
+        SDL2::SDL2-static
+        "-framework UIKit"
+        "-framework OpenGLES"
+        "-framework AudioToolbox"
+        "-framework CoreAudio"
+        "-framework CoreMotion"
+        "-framework CoreHaptics"
+        "-framework GameController"
+        "-framework Foundation"
+        "-framework AVFoundation"
+        iconv
+    )
+
+    set_target_properties(Amplitron PROPERTIES
+        MACOSX_BUNDLE_INFO_PLIST              "${CMAKE_SOURCE_DIR}/ios/Info.plist"
+        MACOSX_BUNDLE_BUNDLE_NAME             "Amplitron"
+        MACOSX_BUNDLE_BUNDLE_VERSION          "${AMPLITRON_VERSION}"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING    "${AMPLITRON_VERSION}"
+        XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "15.0"
+        XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY    ""
+        XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "NO"
+        XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED  "NO"
+    )
+
+else() # NOT EMSCRIPTEN, ANDROID, or IOS
 
     # --- Native desktop build (unchanged) ---
 
@@ -315,4 +419,4 @@ else() # NOT EMSCRIPTEN
     install(DIRECTORY presets DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/amplitron)
     install(DIRECTORY assets/fonts DESTINATION bin/assets)
 
-endif() # EMSCRIPTEN
+endif() # EMSCRIPTEN / ANDROID / IOS / desktop

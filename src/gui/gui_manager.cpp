@@ -69,6 +69,10 @@ bool GuiManager::initialize(int width, int height) {
     }
 
     gl_context_ = SDL_GL_CreateContext(window_);
+    if (!gl_context_) {
+        std::cerr << "SDL_GL_CreateContext failed: " << SDL_GetError() << std::endl;
+        return false;
+    }
     SDL_GL_MakeCurrent(window_, gl_context_);
     SDL_GL_SetSwapInterval(1); // vsync
 
