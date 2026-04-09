@@ -93,10 +93,8 @@ void GuiSnapshots::render() {
         if (ImGui::Button(btn_id)) {
             if (is_filled) {
                 recall_slot(i);
-            } else {
-                // Click on empty slot → save current board here
-                save_to_slot(i);
             }
+            // Empty slot left-click does nothing; use right-click to save
         }
 
         ImGui::PopStyleColor(3);
@@ -105,13 +103,13 @@ void GuiSnapshots::render() {
         if (ImGui::IsItemHovered()) {
             if (is_filled) {
                 ImGui::SetTooltip(
-                    "Recall snapshot %s (or Ctrl+%d)\n"
+                    "Left-click to recall snapshot %s (or Ctrl+%d)\n"
                     "Right-click to overwrite or clear",
                     SnapshotManager::SLOT_LABELS[i], i + 1);
             } else {
                 ImGui::SetTooltip(
                     "Slot %s is empty\n"
-                    "Click or right-click to save current board here",
+                    "Right-click to save current board here",
                     SnapshotManager::SLOT_LABELS[i]);
             }
         }
@@ -148,7 +146,7 @@ void GuiSnapshots::render() {
         status_timer_ -= ImGui::GetIO().DeltaTime;
     } else {
         ImGui::TextColored(Theme::TextDim(),
-            "  Click to save / recall  |  Ctrl+1-4 to recall");
+            "  Left-click to recall  |  Right-click to save / clear  |  Ctrl+1-4 to recall");
     }
 
     ImGui::EndChild();

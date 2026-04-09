@@ -41,7 +41,7 @@ The undo/redo state-tracking agent.
 ### 1.6 The Snapshot Manager Agent (`snapshot_manager.h`, `gui_snapshots.h/.cpp`)
 The in-session A/B/C/D board-state switching agent.
 * **Role:** Stores up to 4 complete board configurations in memory for instant, glitch-free recall during a live performance session — without any file I/O.
-* **Responsibilities:** Capturing the full effect chain state (effect instances, enabled/mix flags, all parameter values, input/output gains) into numbered slots; restoring a slot via `RecallSnapshotCommand` (undoable via Ctrl+Z); and rendering the [A][B][C][D] toolbar row with visual indication of the active slot. Left-click on an empty slot saves, left-click on a filled slot recalls; Ctrl/Cmd+1–4 recalls; right-click opens a context menu (Save / Clear).
+* **Responsibilities:** Capturing the full effect chain state (effect instances, enabled/mix flags, all parameter values, input/output gains) into numbered slots; restoring a slot via `RecallSnapshotCommand` (undoable via Ctrl+Z); and rendering the [A][B][C][D] toolbar row with visual indication of the active slot. Left-click recalls a filled slot; right-click opens a context menu to save or clear any slot; Ctrl/Cmd+1–4 recalls.
 
 ### 1.7 The Spectrum Analyzer Agent (`spectrum_analyzer.cpp`)
 The frequency-domain visualization agent.
