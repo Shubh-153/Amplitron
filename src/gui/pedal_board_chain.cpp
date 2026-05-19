@@ -172,9 +172,11 @@ void PedalBoard::render_signal_chain() {
                            IM_COL32(80, 80, 80, 180), 1.5f, 6.0f, 4.0f);
         }
 
-        // Tooltip on pedal hover
+        // Tooltip on pedal hover: only show it when hovering the pedal background
+        // and no child control/item is currently hovered, so control-specific tooltips
+        // from the pedal widget are not overridden.
         ImVec2 pedal_max = ImVec2(next_pedal_x + Theme::PEDAL_WIDTH, origin.y + Theme::PEDAL_HEIGHT);
-        if (ImGui::IsMouseHoveringRect(pedal_min, pedal_max)) {
+        if (ImGui::IsMouseHoveringRect(pedal_min, pedal_max) && !ImGui::IsAnyItemHovered()) {
             ImGui::SetTooltip("%s (%s)", widgets_[i]->get_effect()->name(), enabled ? "Active" : "Bypassed");
         }
 
