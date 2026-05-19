@@ -133,7 +133,7 @@ void PedalBoard::render_signal_chain() {
         ImVec2 seg_min(pedal_x, line_y - 5);
         ImVec2 seg_max(pedal_x + 170, line_y + 5);
 
-        if (ImGui::IsMouseHoveringRect(seg_min, seg_max)) {
+        if (ImGui::IsMouseHoveringRect(seg_min, seg_max) && !ImGui::IsAnyItemHovered()) {
             ImGui::SetTooltip("%s", widgets_[i]->get_effect()->name());
         }
 
