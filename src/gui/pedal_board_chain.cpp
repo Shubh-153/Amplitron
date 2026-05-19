@@ -174,7 +174,7 @@ void PedalBoard::render_signal_chain() {
 
         // Tooltip on pedal hover
         ImVec2 pedal_max = ImVec2(next_pedal_x + Theme::PEDAL_WIDTH, origin.y + Theme::PEDAL_HEIGHT);
-        if (ImGui::IsMouseHoveringRect(pedal_min, pedal_max) && !ImGui::IsAnyItemHovered()) {
+        if (ImGui::IsMouseHoveringRect(pedal_min, pedal_max)) {
             ImGui::SetTooltip("%s (%s)", widgets_[i]->get_effect()->name(), enabled ? "Active" : "Bypassed");
         }
 
