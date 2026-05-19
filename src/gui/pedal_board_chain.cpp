@@ -3,6 +3,7 @@
 #include "gui/theme.h"
 #include "gui/command.h"
 #include <cmath>
+#include <algorithm>
 
 #include <imgui.h>
 #include <cstdio>
@@ -18,6 +19,9 @@ static void DrawDashedLine(ImDrawList* dl, ImVec2 p1, ImVec2 p2, ImU32 col,
                           float gap_len = 4.0f) {
     float dist = std::sqrt((p2.x - p1.x) * (p2.x - p1.x) + 
                            (p2.y - p1.y) * (p2.y - p1.y));
+    if (dist <= 0.0f) {
+    return;
+}                       
     ImVec2 dir = ImVec2((p2.x - p1.x) / dist, (p2.y - p1.y) / dist);
     
     float cycle = dash_len + gap_len;
