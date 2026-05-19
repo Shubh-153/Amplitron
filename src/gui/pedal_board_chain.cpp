@@ -51,27 +51,73 @@ void PedalBoard::render_signal_chain() {
         return;
     }
 
+    // Add vertical padding at the top of the child window to make room for the flow line
+    ImGui::Dummy(ImVec2(0, 30.0f));
+    
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 origin = ImGui::GetCursorScreenPos();
 
-    float line_y = origin.y + 195; //160  to 172
-    float pulse = 0.75f + 0.25f * sin(ImGui::GetTime() * 3.0f);
-    // Compute the actual content width of the chain. Keeping this tight prevents
-    // the horizontal scrollbar from appearing due to a few extra pixels of padding.
-    float total_width = 20.0f + static_cast<float>(visible.size()) * 195.0f;
+    // Configuration for the signal flow line
+    // Now y is measured AFTER the dummy, so we draw in the padding area.
+    const float line_y = origin.y - 15.0f; 
+    const float line_thickness = 3.0f;
+    const float pedal_spacing = 195.0f;
+    const float pedal_start_x = origin.x + 20.0f;
+    
+    // Animation pulse based on time and audio level
+    float level = engine_.get_output_level();
+    float time = (float)ImGui::GetTime();
+    float pulse = 0.6f + 0.4f * std::sin(time * 5.0f) * (0.5f + level * 2.0f);
+    bool is_running = engine_.is_running();
 
-    dl->AddCircleFilled(ImVec2(origin.x + 5, line_y), 6, Theme::CHAIN_JACK);
-    dl->AddCircle(ImVec2(origin.x + 5, line_y), 6, Theme::BORDER_DARK, 0, 1.5f);
+    float total_chain_width = 20.0f + static_cast<float>(visible.size()) * pedal_spacing;
 
-    float pedal_x = origin.x + 20;
+    // 1. Draw the input jack
+    dl->AddCircleFilled(ImVec2(origin.x + 5, line_y), 7, Theme::CHAIN_JACK);
+    dl->AddCircle(ImVec2(origin.x + 5, line_y), 7, Theme::BORDER_DARK, 0, 1.5f);
+
+    float current_x = origin.x + 5;
     int remove_idx = -1;
     bool needs_rebuild = false;
 
     for (int vi = 0; vi < static_cast<int>(visible.size()); ++vi) {
         int i = visible[vi];
-        ImVec2 pedal_min = ImVec2(pedal_x, origin.y + 5);
+        float next_pedal_x = pedal_start_x + vi * pedal_spacing;
+        
+        // --- Segment from previous point to this pedal (The "Cable") ---
+        // Added a slight "slack" (downward curve) to make it look less mechanical/stiff.
+        ImVec2 p1 = ImVec2(current_x, line_y);
+        ImVec2 p2 = ImVec2(next_pedal_x, line_y);
+        
+        ImU32 cable_col = is_running ? Theme::ACCENT_GOLD_DIM : Theme::CHAIN_LINE;
+        if (is_running) {
+            ImU32 r = (cable_col >> 0) & 0xFF;
+            ImU32 g = (cable_col >> 8) & 0xFF;
+            ImU32 b = (cable_col >> 16) & 0xFF;
+            cable_col = IM_COL32(r, g, b, (int)(200 * (0.8f + 0.2f * pulse)));
+        }
 
+        // Slight Bezier for slack
+        ImVec2 cp1 = ImVec2(p1.x + (p2.x - p1.x) * 0.35f, p1.y + 4.0f);
+        ImVec2 cp2 = ImVec2(p1.x + (p2.x - p1.x) * 0.65f, p1.y + 4.0f);
+        dl->AddBezierCubic(p1, cp1, cp2, p2, cable_col, line_thickness);
+        
+        // Add moving "signal" highlight along the cable if running
+        if (is_running && level > 0.01f) {
+            float t_off = std::fmod(time * 2.0f, 1.0f);
+            // Draw a small bright segment moving along the curve
+            for (int step = 0; step < 5; ++step) {
+                float t = std::fmod(t_off + step * 0.02f, 1.0f);
+                // Simple linear interp for the highlight (approximation of the curve)
+                ImVec2 h_pos = ImVec2(p1.x + (p2.x - p1.x) * t, p1.y + 4.0f * std::sin(t * 3.14159f));
+                dl->AddCircleFilled(h_pos, 2.0f, Theme::ACCENT_GOLD_HOT);
+            }
+        }
+
+        // --- Render the pedal widget ---
+        ImVec2 pedal_min = ImVec2(next_pedal_x, origin.y);
         ImGui::SetCursorScreenPos(pedal_min);
+        
         char dnd_id[32];
         snprintf(dnd_id, sizeof(dnd_id), "##dnd_%d", i);
         ImGui::SetNextItemAllowOverlap();
@@ -101,51 +147,48 @@ void PedalBoard::render_signal_chain() {
             remove_idx = i;
         }
 
-        if (vi < static_cast<int>(visible.size()) - 1) {
-            float dot_x = pedal_x + 190;
-            dl->AddCircleFilled(ImVec2(dot_x, line_y), 4, Theme::CHAIN_DOT);
-        }
+        // --- Segment OVER the pedal ---
         bool enabled = widgets_[i]->get_effect()->is_enabled();
-
+        float pedal_end_x = next_pedal_x + Theme::PEDAL_WIDTH;
+        
         if (enabled) {
-            ImU32 base_gold = Theme::ACCENT_GOLD_HOT;
-            ImU32 r = (base_gold >> 0) & 0xFF;
-            ImU32 g = (base_gold >> 8) & 0xFF;
-            ImU32 b = (base_gold >> 16) & 0xFF;
-            ImU32 a = static_cast<ImU32>(255 * pulse);
-            ImU32 seg_color = IM_COL32(r, g, b, a);
-
-            dl->AddLine(
-                ImVec2(pedal_x, line_y),
-                ImVec2(pedal_x + 170, line_y),
-                seg_color,
-                3.0f
-            );
+            const auto* colors = get_effect_color(widgets_[i]->get_effect()->name());
+            ImU32 pedal_accent = ImGui::ColorConvertFloat4ToU32(colors->led_color);
+            
+            ImU32 r = (pedal_accent >> 0) & 0xFF;
+            ImU32 g = (pedal_accent >> 8) & 0xFF;
+            ImU32 b = (pedal_accent >> 16) & 0xFF;
+            
+            // Draw multiple layers for a rich "neon" glow effect
+            dl->AddLine(ImVec2(next_pedal_x, line_y), ImVec2(pedal_end_x, line_y), 
+                        IM_COL32(r, g, b, (int)(60 * pulse)), line_thickness + 6.0f);
+            dl->AddLine(ImVec2(next_pedal_x, line_y), ImVec2(pedal_end_x, line_y), 
+                        IM_COL32(r, g, b, (int)(120 * pulse)), line_thickness + 2.0f);
+            dl->AddLine(ImVec2(next_pedal_x, line_y), ImVec2(pedal_end_x, line_y), 
+                        IM_COL32(255, 255, 255, (int)(200 * pulse)), 1.5f);
         } else {
-            ImU32 bypass_color = IM_COL32(120, 120, 120, 255);
-            DrawDashedLine(
-                dl,
-                ImVec2(pedal_x, line_y),
-                ImVec2(pedal_x + 170, line_y),
-                bypass_color,
-                3.0f,
-                5.0f,
-                3.0f
-            );
+            // Bypassed style: thinner, darker, dashed
+            DrawDashedLine(dl, ImVec2(next_pedal_x, line_y), ImVec2(pedal_end_x, line_y), 
+                           IM_COL32(80, 80, 80, 180), 1.5f, 6.0f, 4.0f);
         }
 
-        ImVec2 seg_min(pedal_x, line_y - 5);
-        ImVec2 seg_max(pedal_x + 170, line_y + 5);
-
-        if (ImGui::IsMouseHoveringRect(seg_min, seg_max) && !ImGui::IsAnyItemHovered()) {
-            ImGui::SetTooltip("%s", widgets_[i]->get_effect()->name());
+        // Tooltip on pedal hover
+        ImVec2 pedal_max = ImVec2(next_pedal_x + Theme::PEDAL_WIDTH, origin.y + Theme::PEDAL_HEIGHT);
+        if (ImGui::IsMouseHoveringRect(pedal_min, pedal_max) && !ImGui::IsAnyItemHovered()) {
+            ImGui::SetTooltip("%s (%s)", widgets_[i]->get_effect()->name(), enabled ? "Active" : "Bypassed");
         }
 
-        pedal_x += 195;
+        current_x = pedal_end_x;
     }
 
-    dl->AddCircleFilled(ImVec2(pedal_x, line_y), 6, Theme::CHAIN_JACK);
-    dl->AddCircle(ImVec2(pedal_x, line_y), 6, Theme::BORDER_DARK, 0, 1.5f);
+    // --- Final segment to output jack ---
+    float output_jack_x = origin.x + total_chain_width;
+    ImU32 final_col = is_running ? Theme::ACCENT_GOLD_DIM : Theme::CHAIN_LINE;
+    dl->AddLine(ImVec2(current_x, line_y), ImVec2(output_jack_x, line_y), final_col, line_thickness);
+
+    // --- Output jack ---
+    dl->AddCircleFilled(ImVec2(output_jack_x, line_y), 7, Theme::CHAIN_JACK);
+    dl->AddCircle(ImVec2(output_jack_x, line_y), 7, Theme::BORDER_DARK, 0, 1.5f);
 
     if (remove_idx >= 0) {
         visible_indices_.erase(remove_idx);
@@ -157,10 +200,9 @@ void PedalBoard::render_signal_chain() {
         rebuild_widgets();
     }
 
-    // Reserve space so the child window's content size matches the drawn chain.
-    // Add only a small tail so the end jack isn't flush against the edge.
+    // Space for scrolling
     ImGui::SetCursorPos(ImVec2(0, 0));
-    ImGui::Dummy(ImVec2(total_width + 8.0f, 340));
+    ImGui::Dummy(ImVec2(total_chain_width + 40.0f, Theme::PEDAL_HEIGHT + 40.0f));
 }
 
 } // namespace Amplitron
