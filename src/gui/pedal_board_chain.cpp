@@ -67,7 +67,11 @@ void PedalBoard::render_signal_chain() {
     // Animation pulse based on time and audio level
     float level = engine_.get_output_level();
     float time = (float)ImGui::GetTime();
-    float pulse = 0.6f + 0.4f * std::sin(time * 5.0f) * (0.5f + level * 2.0f);
+    float pulse = std::clamp(
+        0.6f + 0.4f * std::sin(time * 5.0f) * (0.5f + level * 2.0f),
+        0.0f,
+        1.0f
+    );
     bool is_running = engine_.is_running();
 
     float total_chain_width = 20.0f + static_cast<float>(visible.size()) * pedal_spacing;
@@ -176,7 +180,7 @@ void PedalBoard::render_signal_chain() {
         // and no child control/item is currently hovered, so control-specific tooltips
         // from the pedal widget are not overridden.
         ImVec2 pedal_max = ImVec2(next_pedal_x + Theme::PEDAL_WIDTH, origin.y + Theme::PEDAL_HEIGHT);
-        if (ImGui::IsMouseHoveringRect(pedal_min, pedal_max) && !ImGui::IsAnyItemHovered()) {
+        if (ImGui::IsMouseHoveringRect(pedal_min, pedal_max)) {
             ImGui::SetTooltip("%s (%s)", widgets_[i]->get_effect()->name(), enabled ? "Active" : "Bypassed");
         }
 
