@@ -3,37 +3,12 @@
 #include "gui/theme.h"
 #include "gui/gui_graph_state.h"
 #include "gui/command.h"
-<<<<<<< HEAD
-#include <cmath>
 #include <algorithm>
-
-=======
->>>>>>> 7bb5c76450d1c4cc920e86d924c7045ecdcd54ec
 #include <imgui.h>
 #include <unordered_map>
 #include <cmath>
 
 namespace Amplitron {
-
-// Helper: draw a dashed line
-static void DrawDashedLine(ImDrawList* dl, ImVec2 p1, ImVec2 p2, ImU32 col, 
-                          float thickness = 1.0f, float dash_len = 4.0f, 
-                          float gap_len = 4.0f) {
-    float dist = std::sqrt((p2.x - p1.x) * (p2.x - p1.x) + 
-                           (p2.y - p1.y) * (p2.y - p1.y));
-    if (dist <= 0.0f) {
-    return;
-}                       
-    ImVec2 dir = ImVec2((p2.x - p1.x) / dist, (p2.y - p1.y) / dist);
-    
-    float cycle = dash_len + gap_len;
-    for (float d = 0.0f; d < dist; d += cycle) {
-        ImVec2 start = ImVec2(p1.x + dir.x * d, p1.y + dir.y * d);
-        float end_d = std::min(d + dash_len, dist);
-        ImVec2 end = ImVec2(p1.x + dir.x * end_d, p1.y + dir.y * end_d);
-        dl->AddLine(start, end, col, thickness);
-    }
-}
 
 void PedalBoard::render_signal_chain() {
     auto& ui_state = GuiGraphState::get_instance();
@@ -98,97 +73,6 @@ void PedalBoard::render_signal_chain() {
         }
     }
 
-<<<<<<< HEAD
-    // Add vertical padding at the top of the child window to make room for the flow line
-    ImGui::Dummy(ImVec2(0, 30.0f));
-    
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    ImVec2 origin = ImGui::GetCursorScreenPos();
-
-    // Configuration for the signal flow line
-    // Now y is measured AFTER the dummy, so we draw in the padding area.
-    const float line_y = origin.y - 15.0f; 
-    const float line_thickness = 3.0f;
-    const float pedal_spacing = 195.0f;
-    const float pedal_start_x = origin.x + 20.0f;
-    
-    // Animation pulse based on time and audio level
-    float level = engine_.get_output_level();
-    float time = (float)ImGui::GetTime();
-    float pulse = std::clamp(
-        0.6f + 0.4f * std::sin(time * 5.0f) * (0.5f + level * 2.0f),
-        0.0f,
-        1.0f
-    );
-    bool is_running = engine_.is_running();
-
-    float total_chain_width = 20.0f + static_cast<float>(visible.size()) * pedal_spacing;
-
-    // 1. Draw the input jack
-    dl->AddCircleFilled(ImVec2(origin.x + 5, line_y), 7, Theme::CHAIN_JACK);
-    dl->AddCircle(ImVec2(origin.x + 5, line_y), 7, Theme::BORDER_DARK, 0, 1.5f);
-
-    float current_x = origin.x + 5;
-    int remove_idx = -1;
-    bool needs_rebuild = false;
-
-    for (int vi = 0; vi < static_cast<int>(visible.size()); ++vi) {
-        int i = visible[vi];
-        float next_pedal_x = pedal_start_x + vi * pedal_spacing;
-        
-        // --- Segment from previous point to this pedal (The "Cable") ---
-        // Added a slight "slack" (downward curve) to make it look less mechanical/stiff.
-        ImVec2 p1 = ImVec2(current_x, line_y);
-        ImVec2 p2 = ImVec2(next_pedal_x, line_y);
-        
-        ImU32 cable_col = is_running ? Theme::ACCENT_GOLD_DIM : Theme::CHAIN_LINE;
-        if (is_running) {
-            ImU32 r = (cable_col >> 0) & 0xFF;
-            ImU32 g = (cable_col >> 8) & 0xFF;
-            ImU32 b = (cable_col >> 16) & 0xFF;
-            cable_col = IM_COL32(r, g, b, (int)(200 * (0.8f + 0.2f * pulse)));
-        }
-
-        // Slight Bezier for slack
-        ImVec2 cp1 = ImVec2(p1.x + (p2.x - p1.x) * 0.35f, p1.y + 4.0f);
-        ImVec2 cp2 = ImVec2(p1.x + (p2.x - p1.x) * 0.65f, p1.y + 4.0f);
-        dl->AddBezierCubic(p1, cp1, cp2, p2, cable_col, line_thickness);
-        
-        // Add moving "signal" highlight along the cable if running
-        if (is_running && level > 0.01f) {
-            float t_off = std::fmod(time * 2.0f, 1.0f);
-            // Draw a small bright segment moving along the curve
-            for (int step = 0; step < 5; ++step) {
-                float t = std::fmod(t_off + step * 0.02f, 1.0f);
-                // Simple linear interp for the highlight (approximation of the curve)
-                ImVec2 h_pos = ImVec2(p1.x + (p2.x - p1.x) * t, p1.y + 4.0f * std::sin(t * 3.14159f));
-                dl->AddCircleFilled(h_pos, 2.0f, Theme::ACCENT_GOLD_HOT);
-            }
-        }
-
-        // --- Render the pedal widget ---
-        ImVec2 pedal_min = ImVec2(next_pedal_x, origin.y);
-        ImGui::SetCursorScreenPos(pedal_min);
-        
-        char dnd_id[32];
-        snprintf(dnd_id, sizeof(dnd_id), "##dnd_%d", i);
-        ImGui::SetNextItemAllowOverlap();
-        ImGui::InvisibleButton(dnd_id, ImVec2(Theme::PEDAL_WIDTH, Theme::PEDAL_HEIGHT));
-
-        bool is_amp = std::strcmp(widgets_[i]->get_effect()->name(), "Amp Sim") == 0;
-        if (!is_amp) {
-            if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
-                ImGui::SetDragDropPayload("PEDAL_REORDER", &i, sizeof(int));
-                ImGui::Text("Move %s", widgets_[i]->get_effect()->name());
-                ImGui::EndDragDropSource();
-            }
-            if (ImGui::BeginDragDropTarget()) {
-                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("PEDAL_REORDER")) {
-                    int source_idx = *static_cast<const int*>(payload->Data);
-                    if (source_idx != i) {
-                        history_.execute(std::make_unique<ReorderEffectCommand>(engine_, source_idx, i));
-                        needs_rebuild = true;
-=======
     draw_list->PushClipRect(canvas_pos, canvas_end, true);
 
     ImVec2 offset = ImVec2(canvas_pos.x + ui_state.scrolling.x, canvas_pos.y + ui_state.scrolling.y);
@@ -225,14 +109,18 @@ void PedalBoard::render_signal_chain() {
                     float right_edge = pos_it->second.position.x + width;
                     if (right_edge > max_right) {
                         max_right = right_edge;
->>>>>>> 7bb5c76450d1c4cc920e86d924c7045ecdcd54ec
                     }
                 }
-                float insert_x = ui_state.node_positions.empty() ? 40.0f : max_right + 80.0f;
-                ui_state.node_positions[node.id] = { ImVec2(insert_x, 60.0f), false };
             }
+            float insert_x = ui_state.node_positions.empty() ? 40.0f : max_right + 80.0f;
+            ui_state.node_positions[node.id] = { ImVec2(insert_x, 60.0f), false };
         }
     }
+
+    // Animation pulse based on time and audio level
+    float level = engine_.get_output_level();
+    float time = (float)ImGui::GetTime();
+    bool is_running = engine_.is_running();
 
     for (const auto& node : audio_graph.get_nodes()) {
 
@@ -254,7 +142,6 @@ void PedalBoard::render_signal_chain() {
         float node_height = (target_widget ? 360.0f : 70.0f) * ui_state.zoom;
 
         ImGui::PushID(node.id);
-
 
         if (target_widget) {
             ImGui::SetCursorScreenPos(node_screen_pos);
@@ -290,57 +177,6 @@ void PedalBoard::render_signal_chain() {
             ImGui::SetWindowFontScale(1.0f);
         }
 
-<<<<<<< HEAD
-        // --- Segment OVER the pedal ---
-        bool enabled = widgets_[i]->get_effect()->is_enabled();
-        float pedal_end_x = next_pedal_x + Theme::PEDAL_WIDTH;
-        
-        if (enabled) {
-            const auto* colors = get_effect_color(widgets_[i]->get_effect()->name());
-            ImU32 pedal_accent = ImGui::ColorConvertFloat4ToU32(colors->led_color);
-            
-            ImU32 r = (pedal_accent >> 0) & 0xFF;
-            ImU32 g = (pedal_accent >> 8) & 0xFF;
-            ImU32 b = (pedal_accent >> 16) & 0xFF;
-            
-            // Draw multiple layers for a rich "neon" glow effect
-            dl->AddLine(ImVec2(next_pedal_x, line_y), ImVec2(pedal_end_x, line_y), 
-                        IM_COL32(r, g, b, (int)(60 * pulse)), line_thickness + 6.0f);
-            dl->AddLine(ImVec2(next_pedal_x, line_y), ImVec2(pedal_end_x, line_y), 
-                        IM_COL32(r, g, b, (int)(120 * pulse)), line_thickness + 2.0f);
-            dl->AddLine(ImVec2(next_pedal_x, line_y), ImVec2(pedal_end_x, line_y), 
-                        IM_COL32(255, 255, 255, (int)(200 * pulse)), 1.5f);
-        } else {
-            // Bypassed style: thinner, darker, dashed
-            DrawDashedLine(dl, ImVec2(next_pedal_x, line_y), ImVec2(pedal_end_x, line_y), 
-                           IM_COL32(80, 80, 80, 180), 1.5f, 6.0f, 4.0f);
-        }
-
-        // Tooltip on pedal hover: only show it when hovering the pedal background
-        // and no child control/item is currently hovered, so control-specific tooltips
-        // from the pedal widget are not overridden.
-        ImVec2 pedal_max = ImVec2(next_pedal_x + Theme::PEDAL_WIDTH, origin.y + Theme::PEDAL_HEIGHT);
-        if (ImGui::IsMouseHoveringRect(pedal_min, pedal_max)) {
-            ImGui::SetTooltip("%s (%s)", widgets_[i]->get_effect()->name(), enabled ? "Active" : "Bypassed");
-        }
-
-        current_x = pedal_end_x;
-    }
-
-    // --- Final segment to output jack ---
-    float output_jack_x = origin.x + total_chain_width;
-    ImU32 final_col = is_running ? Theme::ACCENT_GOLD_DIM : Theme::CHAIN_LINE;
-    dl->AddLine(ImVec2(current_x, line_y), ImVec2(output_jack_x, line_y), final_col, line_thickness);
-
-    // --- Output jack ---
-    dl->AddCircleFilled(ImVec2(output_jack_x, line_y), 7, Theme::CHAIN_JACK);
-    dl->AddCircle(ImVec2(output_jack_x, line_y), 7, Theme::BORDER_DARK, 0, 1.5f);
-
-    if (remove_idx >= 0) {
-        visible_indices_.erase(remove_idx);
-        history_.execute(std::make_unique<RemoveEffectCommand>(engine_, remove_idx));
-        needs_rebuild = true;
-=======
         if (!node.is_reachable) {
             ImVec2 node_end = ImVec2(node_screen_pos.x + node_width, node_screen_pos.y + node_height);
             draw_list->AddRectFilled(node_screen_pos, node_end, IM_COL32(0, 0, 0, 180), Theme::ROUNDING_MD * ui_state.zoom);
@@ -349,6 +185,115 @@ void PedalBoard::render_signal_chain() {
             ImGui::SetWindowFontScale(ui_state.zoom * 0.9f);
             draw_list->AddText(text_pos, IM_COL32(255, 60, 60, 255), "DISCONNECTED");
             ImGui::SetWindowFontScale(1.0f);
+        }
+
+        // --- INTERNAL SIGNAL FLOW / ELECTRICITY EFFECT ---
+        if (node.is_reachable && (!node.input_pin_ids.empty() || !node.output_pin_ids.empty())) {
+            bool enabled = true;
+            if (target_widget) {
+                enabled = target_widget->get_effect()->is_enabled();
+            }
+
+            // Align with pins
+            float in_y = node_screen_pos.y + node_height * 0.5f;
+            if (!node.input_pin_ids.empty()) {
+                in_y = node_screen_pos.y + (node_height * (0 + 1.0f) / (node.input_pin_ids.size() + 1.0f));
+            }
+            float out_y = node_screen_pos.y + node_height * 0.5f;
+            if (!node.output_pin_ids.empty()) {
+                out_y = node_screen_pos.y + (node_height * (0 + 1.0f) / (node.output_pin_ids.size() + 1.0f));
+            }
+            
+            ImVec2 flow_p1(node_screen_pos.x, in_y);
+            ImVec2 flow_p2(node_screen_pos.x + node_width, out_y);
+
+            if (enabled) {
+                // --- ELECTRICITY PASSING THROUGH (ACTIVE) ---
+                // No internal line (as requested), only glowing edges
+                ImU32 flow_col = IM_COL32(200, 230, 255, 255);
+                if (target_widget) {
+                    const auto* colors = get_effect_color(target_widget->get_effect()->name());
+                    flow_col = ImGui::ColorConvertFloat4ToU32(colors->led_color);
+                }
+                
+                ImU32 r = (flow_col >> 0) & 0xFF;
+                ImU32 g = (flow_col >> 8) & 0xFF;
+                ImU32 b = (flow_col >> 16) & 0xFF;
+
+                float pulse = 0.6f + 0.4f * std::sin(time * 8.0f) * (0.5f + level * 2.0f);
+
+                // --- GLOWING EDGES ---
+                float jitter = std::sin(time * 40.0f) * 1.5f * ui_state.zoom;
+                ImVec2 p_min(node_screen_pos.x - (2.0f + jitter), node_screen_pos.y - (2.0f + jitter));
+                ImVec2 p_max(node_screen_pos.x + node_width + (2.0f + jitter), node_screen_pos.y + node_height + (2.0f + jitter));
+                
+                draw_list->AddRect(p_min, p_max, IM_COL32(r, g, b, (int)(180 * pulse)), Theme::ROUNDING_MD * ui_state.zoom, 0, 3.0f * ui_state.zoom);
+                draw_list->AddRect(p_min, p_max, IM_COL32(255, 255, 255, (int)(220 * pulse)), Theme::ROUNDING_MD * ui_state.zoom, 0, 1.0f * ui_state.zoom);
+            } else {
+                // --- ELECTRIC HIGH-RAIL BYPASS PATH ---
+                // Rectangular "bridge" that goes ABOVE the pedal, not around it
+                float rail_height = 65.0f * ui_state.zoom;
+                float rail_y = node_screen_pos.y - rail_height;
+                
+                ImVec2 p_rail_in(flow_p1.x, rail_y);
+                ImVec2 p_rail_out(flow_p2.x, rail_y);
+                
+                ImU32 core_col = IM_COL32(200, 230, 255, 255);
+                ImU32 glow_col = IM_COL32(60, 150, 255, 180);
+                
+                // Jagged jitter for lightning effect
+                float jitter_y = std::sin(time * 45.0f) * 2.0f * ui_state.zoom;
+                float jitter_x = std::cos(time * 40.0f) * 1.5f * ui_state.zoom;
+
+                auto draw_electric_dotted_line = [&](ImVec2 a, ImVec2 b) {
+                    float dx = b.x - a.x;
+                    float dy = b.y - a.y;
+                    float dist = std::sqrt(dx * dx + dy * dy);
+                    int dots = (int)(dist / (10.0f * ui_state.zoom));
+                    if (dots < 2) dots = 2;
+
+                    for (int i = 0; i < dots; i += 2) {
+                        float t1 = (float)i / dots;
+                        float t2 = (float)(i + 1) / dots;
+                        ImVec2 s(a.x + dx * t1 + jitter_x, a.y + dy * t1 + jitter_y);
+                        ImVec2 e(a.x + dx * t2 + jitter_x, a.y + dy * t2 + jitter_y);
+                        draw_list->AddLine(s, e, glow_col, 4.0f * ui_state.zoom);
+                        draw_list->AddLine(s, e, core_col, 1.5f * ui_state.zoom);
+                    }
+                };
+
+                // 1. Vertical segment from input pin up to rail
+                draw_electric_dotted_line(flow_p1, p_rail_in);
+                // 2. Horizontal segment across the top (The "High Rail")
+                draw_electric_dotted_line(p_rail_in, p_rail_out);
+                // 3. Vertical segment from rail down to output pin
+                draw_electric_dotted_line(p_rail_out, flow_p2);
+
+                // Add moving electric sparks along the rail
+                float spark_t = std::fmod(time * 3.0f, 1.0f);
+                ImVec2 spark_pos;
+                if (spark_t < 0.2f) { // Up
+                    float t = spark_t / 0.2f;
+                    spark_pos = ImVec2(flow_p1.x + jitter_x, flow_p1.y + (rail_y - flow_p1.y) * t + jitter_y);
+                } else if (spark_t < 0.8f) { // Across
+                    float t = (spark_t - 0.2f) / 0.6f;
+                    spark_pos = ImVec2(p_rail_in.x + (p_rail_out.x - p_rail_in.x) * t + jitter_x, rail_y + jitter_y);
+                } else { // Down
+                    float t = (spark_t - 0.8f) / 0.2f;
+                    spark_pos = ImVec2(flow_p2.x + jitter_x, rail_y + (flow_p2.y - rail_y) * t + jitter_y);
+                }
+                draw_list->AddCircleFilled(spark_pos, 3.5f * ui_state.zoom, core_col);
+                draw_list->AddCircle(spark_pos, 7.0f * ui_state.zoom, glow_col, 0, 2.0f * ui_state.zoom);
+
+                if (ImGui::IsMouseHoveringRect(ImVec2(node_screen_pos.x, rail_y - 10), flow_p2)) {
+                    ImGui::SetTooltip("%s (Bypassed - High Rail Electricity)", target_widget->get_effect()->name());
+                }
+            }
+
+            if (ImGui::IsMouseHoveringRect(flow_p1, flow_p2) && (target_widget || !node.name.empty())) {
+                const char* name = target_widget ? target_widget->get_effect()->name() : node.name.c_str();
+                ImGui::SetTooltip("%s (%s)", name, enabled ? "Active" : "Bypassed");
+            }
         }
 
         // ====================================================================
@@ -471,7 +416,6 @@ void PedalBoard::render_signal_chain() {
         }
         ui_state.node_positions.erase(node_to_delete);
         ui_state.active_src_pin_id = -1; // avoid stale pin state after topology change
->>>>>>> 7bb5c76450d1c4cc920e86d924c7045ecdcd54ec
     }
 
     // Draw Patch Cables
@@ -502,6 +446,22 @@ void PedalBoard::render_signal_chain() {
             ImU32 color = hovered ? IM_COL32(255, 100, 100, 255) : IM_COL32(212, 175, 55, 255);
             draw_list->AddBezierCubic(p1, cp1, cp2, p2, color, hovered ? 5.0f * ui_state.zoom : 3.0f * ui_state.zoom);
 
+            // --- Signal Pulse Animation on Cables ---
+            if (is_running) {
+                float t_off = std::fmod(time * 2.0f, 1.0f); // Slightly faster
+                for (int step = 0; step < 4; ++step) { // More pulses
+                    float t = std::fmod(t_off + step * 0.25f, 1.0f);
+                    float u = 1.0f - t;
+                    float hx = (u*u*u) * p1.x + (3*u*u*t) * cp1.x + (3*u*t*t) * cp2.x + (t*t*t) * p2.x;
+                    float hy = (u*u*u) * p1.y + (3*u*u*t) * cp1.y + (3*u*t*t) * cp2.y + (t*t*t) * p2.y;
+                    
+                    // Larger, more vibrant pulse
+                    float pulse_size = (3.0f + 2.0f * level) * ui_state.zoom;
+                    draw_list->AddCircleFilled(ImVec2(hx, hy), pulse_size, Theme::ACCENT_GOLD_HOT);
+                    draw_list->AddCircle(ImVec2(hx, hy), pulse_size + 1.0f * ui_state.zoom, IM_COL32(255, 255, 255, 150));
+                }
+            }
+
             if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
                 link_to_delete = link.id;
             }
@@ -513,11 +473,6 @@ void PedalBoard::render_signal_chain() {
         engine_.commit_graph_changes();
     }
 
-<<<<<<< HEAD
-    // Space for scrolling
-    ImGui::SetCursorPos(ImVec2(0, 0));
-    ImGui::Dummy(ImVec2(total_chain_width + 40.0f, Theme::PEDAL_HEIGHT + 40.0f));
-=======
     // Draw Wire Spline Drafting
     if (ui_state.active_src_pin_id != -1) {
         ImVec2 mouse_pos = ImGui::GetMousePos();
@@ -532,7 +487,6 @@ void PedalBoard::render_signal_chain() {
     }
 
     draw_list->PopClipRect();
->>>>>>> 7bb5c76450d1c4cc920e86d924c7045ecdcd54ec
 }
 
 } // namespace Amplitron
