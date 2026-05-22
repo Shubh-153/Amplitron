@@ -45,6 +45,8 @@ public:
     void shutdown();
     bool run_frame();
 
+    MidiManager& midi_manager() { return midi_manager_; }
+
 private:
     void render_menu_bar();
     void render_master_controls();
@@ -79,6 +81,10 @@ private:
     MidiManager midi_manager_;
     GuiMidi gui_midi_;
     bool show_midi_ = false;
+
+    // Toast notification state
+    std::string toast_message_;
+    float toast_timer_ = 0.0f;
 
     // Update checking
     void check_for_updates();
