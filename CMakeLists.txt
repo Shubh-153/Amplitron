@@ -48,6 +48,17 @@ set(JSON_Install    OFF CACHE INTERNAL "Disable nlohmann/json install")
 FetchContent_MakeAvailable(nlohmann_json)
 # ---------------------------------------------------------------------------
 
+file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/external")
+if(NOT EXISTS "${CMAKE_SOURCE_DIR}/external/nanosvg.h" OR
+   NOT EXISTS "${CMAKE_SOURCE_DIR}/external/nanosvgrast.h" OR
+   NOT EXISTS "${CMAKE_SOURCE_DIR}/external/dr_wav.h")
+    message(FATAL_ERROR
+        "Missing external header dependencies in external/. "
+        "Run scripts/setup_dependencies.sh (Linux/macOS) or "
+        "scripts/setup_dependencies.ps1 (Windows) to fetch nanosvg and dr_wav.")
+endif()
+
+
 # --- Dependencies ---
 # Emscripten provides SDL2, OpenGL ES, and audio via built-in ports.
 # Native builds find PortAudio, SDL2, and OpenGL from the system.
@@ -204,7 +215,7 @@ set(APP_SOURCES
 
 # --- MIDI Support (desktop only) ---
 set(MIDI_SOURCES)
-if(NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
+if(NOT ANDROID AND NOT IOS)
     list(APPEND MIDI_SOURCES
         src/midi/midi_manager.cpp
         src/midi/midi_manager_mapping.cpp
@@ -292,7 +303,7 @@ if(EMSCRIPTEN)
     )
 
     # OpenGL ES 3 for ImGui's OpenGL3 backend on WebGL 2
-    target_compile_definitions(Amplitron PRIVATE IMGUI_IMPL_OPENGL_ES3 AMPLITRON_VERSION="${AMPLITRON_VERSION}" AMPLITRON_NO_MIDI)
+    target_compile_definitions(Amplitron PRIVATE IMGUI_IMPL_OPENGL_ES3 AMPLITRON_VERSION="${AMPLITRON_VERSION}")
 
     target_link_libraries(Amplitron PRIVATE nlohmann_json::nlohmann_json)
 
