@@ -250,6 +250,28 @@ void PedalBoard::render_signal_chain() {
                 draw_consistent_glow_line(p_rail_in, p_rail_out);
                 draw_consistent_glow_line(p_rail_out, flow_p2);
 
+                // --- MOVING ELECTRONS (PULSES) ---
+                // Electrons travel along the bridge path: Up -> Across -> Down
+                float electron_time = std::fmod(time * 2.5f, 1.0f);
+                for (int e = 0; e < 2; ++e) {
+                    float t = std::fmod(electron_time + e * 0.5f, 1.0f);
+                    ImVec2 electron_pos;
+                    
+                    if (t < 0.2f) { // Segment 1: Up
+                        float st = t / 0.2f;
+                        electron_pos = ImVec2(flow_p1.x, flow_p1.y + (rail_y - flow_p1.y) * st + jitter);
+                    } else if (t < 0.8f) { // Segment 2: Across
+                        float st = (t - 0.2f) / 0.6f;
+                        electron_pos = ImVec2(p_rail_in.x + (p_rail_out.x - p_rail_in.x) * st, rail_y + jitter);
+                    } else { // Segment 3: Down
+                        float st = (t - 0.8f) / 0.2f;
+                        electron_pos = ImVec2(p_rail_out.x, rail_y + (flow_p2.y - rail_y) * st + jitter);
+                    }
+                    
+                    draw_list->AddCircleFilled(electron_pos, 3.5f * ui_state.zoom, IM_COL32(255, 255, 255, (int)(220 * pulse)));
+                    draw_list->AddCircle(electron_pos, 7.0f * ui_state.zoom, IM_COL32(r, g, b, (int)(180 * pulse)), 0, 2.0f * ui_state.zoom);
+                }
+
                 if (ImGui::IsMouseHoveringRect(ImVec2(node_screen_pos.x, rail_y - 10), flow_p2)) {
                     ImGui::SetTooltip("%s (Bypassed - High Rail Signal Path)", target_widget->get_effect()->name());
                 }
