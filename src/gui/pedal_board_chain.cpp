@@ -207,23 +207,23 @@ void PedalBoard::render_signal_chain() {
             ImVec2 flow_p1(node_screen_pos.x, in_y);
             ImVec2 flow_p2(node_screen_pos.x + node_width, out_y);
 
+            // --- COLOR & PULSE CALCULATIONS (SHARED) ---
+            ImU32 flow_col = IM_COL32(200, 230, 255, 255);
+            if (target_widget) {
+                const auto* colors = get_effect_color(target_widget->get_effect()->name());
+                flow_col = ImGui::ColorConvertFloat4ToU32(colors->led_color);
+            }
+            
+            ImU32 r = (flow_col >> 0) & 0xFF;
+            ImU32 g = (flow_col >> 8) & 0xFF;
+            ImU32 b = (flow_col >> 16) & 0xFF;
+
+            float pulse = 0.6f + 0.4f * std::sin(time * 8.0f) * (0.5f + level * 2.0f);
+            float jitter = std::sin(time * 40.0f) * 1.5f * ui_state.zoom;
+
             if (enabled) {
                 // --- ELECTRICITY PASSING THROUGH (ACTIVE) ---
-                // No internal line (as requested), only glowing edges
-                ImU32 flow_col = IM_COL32(200, 230, 255, 255);
-                if (target_widget) {
-                    const auto* colors = get_effect_color(target_widget->get_effect()->name());
-                    flow_col = ImGui::ColorConvertFloat4ToU32(colors->led_color);
-                }
-                
-                ImU32 r = (flow_col >> 0) & 0xFF;
-                ImU32 g = (flow_col >> 8) & 0xFF;
-                ImU32 b = (flow_col >> 16) & 0xFF;
-
-                float pulse = 0.6f + 0.4f * std::sin(time * 8.0f) * (0.5f + level * 2.0f);
-
-                // --- GLOWING EDGES ---
-                float jitter = std::sin(time * 40.0f) * 1.5f * ui_state.zoom;
+                // No internal line, only glowing edges
                 ImVec2 p_min(node_screen_pos.x - (2.0f + jitter), node_screen_pos.y - (2.0f + jitter));
                 ImVec2 p_max(node_screen_pos.x + node_width + (2.0f + jitter), node_screen_pos.y + node_height + (2.0f + jitter));
                 
@@ -231,62 +231,27 @@ void PedalBoard::render_signal_chain() {
                 draw_list->AddRect(p_min, p_max, IM_COL32(255, 255, 255, (int)(220 * pulse)), Theme::ROUNDING_MD * ui_state.zoom, 0, 1.0f * ui_state.zoom);
             } else {
                 // --- ELECTRIC HIGH-RAIL BYPASS PATH ---
-                // Rectangular "bridge" that goes ABOVE the pedal, not around it
+                // Rectangular "bridge" with CONSISTENT glow style
                 float rail_height = 65.0f * ui_state.zoom;
                 float rail_y = node_screen_pos.y - rail_height;
                 
                 ImVec2 p_rail_in(flow_p1.x, rail_y);
                 ImVec2 p_rail_out(flow_p2.x, rail_y);
-                
-                ImU32 core_col = IM_COL32(200, 230, 255, 255);
-                ImU32 glow_col = IM_COL32(60, 150, 255, 180);
-                
-                // Jagged jitter for lightning effect
-                float jitter_y = std::sin(time * 45.0f) * 2.0f * ui_state.zoom;
-                float jitter_x = std::cos(time * 40.0f) * 1.5f * ui_state.zoom;
 
-                auto draw_electric_dotted_line = [&](ImVec2 a, ImVec2 b) {
-                    float dx = b.x - a.x;
-                    float dy = b.y - a.y;
-                    float dist = std::sqrt(dx * dx + dy * dy);
-                    int dots = (int)(dist / (10.0f * ui_state.zoom));
-                    if (dots < 2) dots = 2;
-
-                    for (int i = 0; i < dots; i += 2) {
-                        float t1 = (float)i / dots;
-                        float t2 = (float)(i + 1) / dots;
-                        ImVec2 s(a.x + dx * t1 + jitter_x, a.y + dy * t1 + jitter_y);
-                        ImVec2 e(a.x + dx * t2 + jitter_x, a.y + dy * t2 + jitter_y);
-                        draw_list->AddLine(s, e, glow_col, 4.0f * ui_state.zoom);
-                        draw_list->AddLine(s, e, core_col, 1.5f * ui_state.zoom);
-                    }
+                auto draw_consistent_glow_line = [&](ImVec2 p1, ImVec2 p2) {
+                    ImVec2 p1j(p1.x, p1.y + jitter);
+                    ImVec2 p2j(p2.x, p2.y + jitter);
+                    draw_list->AddLine(p1j, p2j, IM_COL32(r, g, b, (int)(180 * pulse)), 4.0f * ui_state.zoom);
+                    draw_list->AddLine(p1j, p2j, IM_COL32(255, 255, 255, (int)(220 * pulse)), 1.5f * ui_state.zoom);
                 };
 
-                // 1. Vertical segment from input pin up to rail
-                draw_electric_dotted_line(flow_p1, p_rail_in);
-                // 2. Horizontal segment across the top (The "High Rail")
-                draw_electric_dotted_line(p_rail_in, p_rail_out);
-                // 3. Vertical segment from rail down to output pin
-                draw_electric_dotted_line(p_rail_out, flow_p2);
-
-                // Add moving electric sparks along the rail
-                float spark_t = std::fmod(time * 3.0f, 1.0f);
-                ImVec2 spark_pos;
-                if (spark_t < 0.2f) { // Up
-                    float t = spark_t / 0.2f;
-                    spark_pos = ImVec2(flow_p1.x + jitter_x, flow_p1.y + (rail_y - flow_p1.y) * t + jitter_y);
-                } else if (spark_t < 0.8f) { // Across
-                    float t = (spark_t - 0.2f) / 0.6f;
-                    spark_pos = ImVec2(p_rail_in.x + (p_rail_out.x - p_rail_in.x) * t + jitter_x, rail_y + jitter_y);
-                } else { // Down
-                    float t = (spark_t - 0.8f) / 0.2f;
-                    spark_pos = ImVec2(flow_p2.x + jitter_x, rail_y + (flow_p2.y - rail_y) * t + jitter_y);
-                }
-                draw_list->AddCircleFilled(spark_pos, 3.5f * ui_state.zoom, core_col);
-                draw_list->AddCircle(spark_pos, 7.0f * ui_state.zoom, glow_col, 0, 2.0f * ui_state.zoom);
+                // Bridge segments
+                draw_consistent_glow_line(flow_p1, p_rail_in);
+                draw_consistent_glow_line(p_rail_in, p_rail_out);
+                draw_consistent_glow_line(p_rail_out, flow_p2);
 
                 if (ImGui::IsMouseHoveringRect(ImVec2(node_screen_pos.x, rail_y - 10), flow_p2)) {
-                    ImGui::SetTooltip("%s (Bypassed - High Rail Electricity)", target_widget->get_effect()->name());
+                    ImGui::SetTooltip("%s (Bypassed - High Rail Signal Path)", target_widget->get_effect()->name());
                 }
             }
 
