@@ -291,6 +291,12 @@ void AudioEngine::drain_commands() {
                 }
                 break;
             }
+            case AudioCommand::SetMixerGain: {
+                if (audio_shadow_executor_) {
+                    audio_shadow_executor_->update_mixer_gain(cmd.effect_index, cmd.param_index, cmd.value);
+                }
+                break;
+            }
             case AudioCommand::SetInputGain:
                 input_gain_.store(cmd.value, std::memory_order_relaxed);
                 break;

@@ -19,6 +19,7 @@ int AudioGraph::add_node(const std::string &name, NodeRoutingType type,
     for (int i = 0; i < inputs_to_create; ++i) {
       node.input_pin_ids.push_back(next_id_++);
     }
+    node.input_gains.assign(inputs_to_create, 1.0f);
     node.output_pin_ids.push_back(next_id_++); // 1 Output Pin
   } else if (type == NodeRoutingType::Splitter) {
     node.input_pin_ids.push_back(next_id_++);  // 1 Input Pin
@@ -342,6 +343,51 @@ void AudioGraph::restore_link(const GraphLink& link) {
       rebuild_topology();
   }
 }
+bool AudioGraph::add_input_pin(int node_id) {
+  for (auto &node : nodes_) {
+    if (node.id == node_id && node.routing_type == NodeRoutingType::Mixer) {
+      if (node.input_pin_ids.size() < 8) {
+        node.input_pin_ids.push_back(next_id_++);
+        node.input_gains.push_back(1.0f);
+        // Do not necessarily need to rebuild topology if we just added an unconnected pin
+        return true;
+      }
+      return false;
+    }
+  }
+  return false;
+}
 
+bool AudioGraph::remove_input_pin(int node_id) {
+  for (auto &node : nodes_) {
+    if (node.id == node_id && node.routing_type == NodeRoutingType::Mixer) {
+      if (node.input_pin_ids.size() > 2) {
+        int pin_to_remove = node.input_pin_ids.back();
+        // Prevent removal if the pin is linked
+        for (const auto &link : links_) {
+          if (link.dest_pin_id == pin_to_remove) {
+            return false;
+          }
+        }
+        node.input_pin_ids.pop_back();
+        node.input_gains.pop_back();
+        return true;
+      }
+      return false;
+    }
+  }
+  return false;
+}
+
+void AudioGraph::set_mixer_input_gain(int node_id, size_t pin_index, float gain) {
+  for (auto &node : nodes_) {
+    if (node.id == node_id && node.routing_type == NodeRoutingType::Mixer) {
+      if (pin_index < node.input_gains.size()) {
+        node.input_gains[pin_index] = std::clamp(gain, 0.0f, 2.0f);
+      }
+      break;
+    }
+  }
+}
 
 } // namespace Amplitron

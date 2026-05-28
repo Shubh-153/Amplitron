@@ -1,7 +1,7 @@
 #include "audio/engine/audio_graph.h"
 #include "audio/engine/audio_graph_executor.h"
 #include "audio/effects/effect_factory.h"
-#include "preset_json.h"
+#include "presets/preset_json.h"
 #include "test_framework.h"
 #include <cmath>
 #include <map>
@@ -982,4 +982,72 @@ TEST(audio_graph_executor_implicit_input_output_paths) {
   for (float sample : output) {
     ASSERT_TRUE(std::isfinite(sample));
   }
+}
+
+// ============================================================================
+// N-Input Mixer Tests
+// ============================================================================
+
+TEST(audio_graph_mixer_n_inputs) {
+  AudioGraph graph;
+  int mixer = graph.add_node("Mixer", NodeRoutingType::Mixer);
+  auto* node = graph.find_node(mixer);
+  
+  // Default is 2 pins
+  ASSERT_TRUE(node->input_pin_ids.size() == 2);
+  
+  // Add a 3rd pin
+  ASSERT_TRUE(graph.add_input_pin(mixer));
+  ASSERT_TRUE(node->input_pin_ids.size() == 3);
+  
+  // Add a 4th pin
+  ASSERT_TRUE(graph.add_input_pin(mixer));
+  ASSERT_TRUE(node->input_pin_ids.size() == 4);
+  
+  // Test removing a pin
+  ASSERT_TRUE(graph.remove_input_pin(mixer));
+  ASSERT_TRUE(node->input_pin_ids.size() == 3);
+}
+
+TEST(audio_graph_mixer_gains) {
+  AudioGraph graph;
+  AudioGraphExecutor executor;
+  executor.prepare(48000, 128);
+
+  int p1 = graph.add_node("Splitter", NodeRoutingType::Splitter);
+  int mixer = graph.add_node("Mixer", NodeRoutingType::Mixer);
+  graph.add_input_pin(mixer); // 3 inputs
+  
+  graph.set_node_as_input(p1, true);
+  graph.set_node_as_output(mixer, true);
+
+  auto nodes = graph.get_nodes();
+  int path1 = graph.add_node("Path1", NodeRoutingType::StandardEffect);
+  int path2 = graph.add_node("Path2", NodeRoutingType::StandardEffect);
+  int path3 = graph.add_node("Path3", NodeRoutingType::StandardEffect);
+  
+  nodes = graph.get_nodes();
+  graph.add_link(nodes[0].output_pin_ids[0], nodes[2].input_pin_ids[0]); // p1[0] -> path1
+  graph.add_link(nodes[0].output_pin_ids[1], nodes[3].input_pin_ids[0]); // p1[1] -> path2
+  graph.set_node_as_input(path3, true);
+
+  nodes = graph.get_nodes();
+  graph.add_link(nodes[2].output_pin_ids[0], nodes[1].input_pin_ids[0]); // path1 -> mixer[0]
+  graph.add_link(nodes[3].output_pin_ids[0], nodes[1].input_pin_ids[1]); // path2 -> mixer[1]
+  graph.add_link(nodes[4].output_pin_ids[0], nodes[1].input_pin_ids[2]); // path3 -> mixer[2]
+
+  graph.set_mixer_input_gain(mixer, 0, 0.5f);
+  graph.set_mixer_input_gain(mixer, 1, 1.0f);
+  graph.set_mixer_input_gain(mixer, 2, 2.0f);
+
+  ASSERT_TRUE(graph.rebuild_topology());
+  executor.compile(graph);
+
+  std::vector<float> input_audio(64, 1.0f);
+  std::vector<float> output_audio(64, 0.0f);
+
+  executor.process(input_audio.data(), output_audio.data(), 64);
+  
+  // Output = 0.5 + 1.0 + 2.0 = 3.5
+  ASSERT_TRUE(std::abs(output_audio[0] - 3.5f) < 0.001f);
 }

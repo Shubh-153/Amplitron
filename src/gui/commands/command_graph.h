@@ -19,12 +19,14 @@ struct AddGraphNodeCommand : public Command {
     ImVec2 position;
     DSPNode cached_node; // To remember exactly what was added for redo
 
-    AddGraphNodeCommand(AudioEngine& engine, const std::string& name, EffectType type, std::shared_ptr<Effect> pedal, ImVec2 pos)
-        : engine_(engine), name(name), type(type), pedal(pedal), position(pos) {}
+    int num_inputs = 0;
+
+    AddGraphNodeCommand(AudioEngine& engine, const std::string& name, EffectType type, std::shared_ptr<Effect> pedal, ImVec2 pos, int num_inputs = 0)
+        : engine_(engine), name(name), type(type), pedal(pedal), position(pos), num_inputs(num_inputs) {}
 
     bool execute() override {
         if (node_id == -1) {
-            node_id = engine_.graph().add_node(name, type, pedal);
+            node_id = engine_.graph().add_node(name, type, pedal, num_inputs);
             auto* added_node = engine_.graph().find_node(node_id);
             if (added_node) cached_node = *added_node;
         } else {
