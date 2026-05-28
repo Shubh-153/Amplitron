@@ -358,25 +358,54 @@ bool AudioGraph::add_input_pin(int node_id) {
   return false;
 }
 
-bool AudioGraph::remove_input_pin(int node_id) {
+bool AudioGraph::remove_input_pin(int node_id, int pin_id) {
   for (auto &node : nodes_) {
-    if (node.id == node_id && node.routing_type == NodeRoutingType::Mixer) {
+    if (node.id == node_id && (node.routing_type == NodeRoutingType::Mixer || node.routing_type == NodeRoutingType::MergeSum)) {
       if (node.input_pin_ids.size() > 2) {
-        int pin_to_remove = node.input_pin_ids.back();
-        // Prevent removal if the pin is linked
-        for (const auto &link : links_) {
-          if (link.dest_pin_id == pin_to_remove) {
-            return false;
-          }
+        int index_to_remove = -1;
+        if (pin_id == -1) {
+           index_to_remove = node.input_pin_ids.size() - 1;
+        } else {
+           for (size_t i = 0; i < node.input_pin_ids.size(); ++i) {
+               if (node.input_pin_ids[i] == pin_id) {
+                   index_to_remove = i;
+                   break;
+               }
+           }
         }
-        node.input_pin_ids.pop_back();
-        node.input_gains.pop_back();
-        return true;
+        if (index_to_remove != -1) {
+            int pin_to_remove = node.input_pin_ids[index_to_remove];
+            // Prevent removal if the pin is linked
+            for (const auto &link : links_) {
+              if (link.dest_pin_id == pin_to_remove) {
+                return false;
+              }
+            }
+            node.input_pin_ids.erase(node.input_pin_ids.begin() + index_to_remove);
+            node.input_gains.erase(node.input_gains.begin() + index_to_remove);
+            return true;
+        }
       }
       return false;
     }
   }
   return false;
+}
+
+void AudioGraph::restore_input_pin(int node_id, int pin_id, int index, float gain) {
+  for (auto &node : nodes_) {
+    if (node.id == node_id) {
+        if (index >= 0 && index <= node.input_pin_ids.size()) {
+            node.input_pin_ids.insert(node.input_pin_ids.begin() + index, pin_id);
+            node.input_gains.insert(node.input_gains.begin() + index, gain);
+        } else {
+            node.input_pin_ids.push_back(pin_id);
+            node.input_gains.push_back(gain);
+        }
+        if (pin_id >= next_id_) next_id_ = pin_id + 1;
+        break;
+    }
+  }
 }
 
 void AudioGraph::set_mixer_input_gain(int node_id, size_t pin_index, float gain) {

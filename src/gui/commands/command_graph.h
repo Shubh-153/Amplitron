@@ -52,6 +52,13 @@ struct AddGraphNodeCommand : public Command {
     const char* description() const override { return "Add Node"; }
 };
 
+struct RemovedPinInfo {
+    int node_id;
+    int pin_id;
+    int index;
+    float gain;
+};
+
 struct RemoveGraphNodeCommand : public Command {
     AudioEngine& engine_;
     NodeId node_id;
@@ -59,6 +66,7 @@ struct RemoveGraphNodeCommand : public Command {
     ImVec2 position;
     std::vector<GraphLink> severed_links; // cache for undo
     DSPNode cached_node;                  // full node data for exact restoration
+    std::vector<RemovedPinInfo> auto_removed_pins; // cache for dynamically removed pins on other nodes
 
     RemoveGraphNodeCommand(AudioEngine& engine, NodeId id, EffectType t, ImVec2 pos)
         : engine_(engine), node_id(id), type(t), position(pos) {}
@@ -80,6 +88,28 @@ struct RemoveGraphNodeCommand : public Command {
 
         engine_.graph().remove_node(node_id);
         GuiGraphState::get_instance().node_positions.erase(node_id);
+        
+        // Clean up empty pins on mixers that were affected by severed links
+        for (const auto& link : severed_links) {
+            int dest_node_id = engine_.graph().get_node_from_pin(link.dest_pin_id);
+            if (dest_node_id != -1) {
+                const DSPNode* n = engine_.graph().find_node(dest_node_id);
+                if (n && (n->routing_type == NodeRoutingType::Mixer || n->routing_type == NodeRoutingType::MergeSum)) {
+                    if (n->input_pin_ids.size() > 2) {
+                        int idx = -1; float gain = 1.0f;
+                        for (size_t i = 0; i < n->input_pin_ids.size(); ++i) {
+                            if (n->input_pin_ids[i] == link.dest_pin_id) {
+                                idx = i; gain = n->input_gains[i]; break;
+                            }
+                        }
+                        if (engine_.graph().remove_input_pin(dest_node_id, link.dest_pin_id)) {
+                            auto_removed_pins.push_back({dest_node_id, link.dest_pin_id, idx, gain});
+                        }
+                    }
+                }
+            }
+        }
+
         engine_.commit_graph_changes();
         return true;
     }
@@ -88,6 +118,9 @@ struct RemoveGraphNodeCommand : public Command {
         engine_.graph().restore_node(cached_node);
         GuiGraphState::get_instance().node_positions[node_id] = { position, false, ImVec2(0, 0) };
         
+        for (auto it = auto_removed_pins.rbegin(); it != auto_removed_pins.rend(); ++it) {
+            engine_.graph().restore_input_pin(it->node_id, it->pin_id, it->index, it->gain);
+        }
         for (const auto& link : severed_links) {
             engine_.graph().restore_link(link);
         }
@@ -101,6 +134,11 @@ struct AddGraphLinkCommand : public Command {
     AudioEngine& engine_;
     GraphLink link;
     bool was_successful = false;
+    
+    int auto_added_pin_node_id = -1;
+    int auto_added_pin_id = -1;
+    int auto_added_pin_index = -1;
+    float auto_added_pin_gain = 1.0f;
 
     AddGraphLinkCommand(AudioEngine& engine, int src_pin, int dst_pin)
         : engine_(engine) {
@@ -122,7 +160,38 @@ struct AddGraphLinkCommand : public Command {
 
             link.id = engine_.graph().add_link(link.source_pin_id, link.dest_pin_id);
             was_successful = (link.id != -1);
+            
+            if (was_successful) {
+                int dest_node_id = engine_.graph().get_node_from_pin(link.dest_pin_id);
+                if (dest_node_id != -1) {
+                    const DSPNode* node = engine_.graph().find_node(dest_node_id);
+                    if (node && (node->routing_type == NodeRoutingType::Mixer || node->routing_type == NodeRoutingType::MergeSum)) {
+                        int occupied_count = 0;
+                        for (int p : node->input_pin_ids) {
+                            for (const auto& l : engine_.graph().get_links()) {
+                                if (l.dest_pin_id == p) {
+                                    occupied_count++; break;
+                                }
+                            }
+                        }
+                        if (occupied_count == node->input_pin_ids.size()) {
+                            if (engine_.graph().add_input_pin(dest_node_id)) {
+                                const DSPNode* updated_node = engine_.graph().find_node(dest_node_id);
+                                int new_pin = updated_node->input_pin_ids.back();
+                                
+                                auto_added_pin_node_id = dest_node_id;
+                                auto_added_pin_id = new_pin;
+                                auto_added_pin_index = updated_node->input_pin_ids.size() - 1;
+                                auto_added_pin_gain = 1.0f;
+                            }
+                        }
+                    }
+                }
+            }
         } else if (was_successful) {
+            if (auto_added_pin_node_id != -1) {
+                engine_.graph().restore_input_pin(auto_added_pin_node_id, auto_added_pin_id, auto_added_pin_index, auto_added_pin_gain);
+            }
             engine_.graph().restore_link(link);
         }
         if (was_successful) {
@@ -134,6 +203,9 @@ struct AddGraphLinkCommand : public Command {
     void undo() override {
         if (was_successful) {
             engine_.graph().remove_link(link.id);
+            if (auto_added_pin_node_id != -1) {
+                engine_.graph().remove_input_pin(auto_added_pin_node_id, auto_added_pin_id);
+            }
             engine_.commit_graph_changes();
         }
     }
@@ -144,6 +216,11 @@ struct AddGraphLinkCommand : public Command {
 struct RemoveGraphLinkCommand : public Command {
     AudioEngine& engine_;
     GraphLink link;
+    
+    int auto_removed_pin_node_id = -1;
+    int auto_removed_pin_id = -1;
+    int auto_removed_pin_index = -1;
+    float auto_removed_pin_gain = 1.0f;
 
     RemoveGraphLinkCommand(AudioEngine& engine, const GraphLink& l)
         : engine_(engine), link(l) {}
@@ -151,12 +228,34 @@ struct RemoveGraphLinkCommand : public Command {
     bool execute() override {
         bool success = engine_.graph().remove_link(link.id);
         if (success) {
+            int dest_node_id = engine_.graph().get_node_from_pin(link.dest_pin_id);
+            if (dest_node_id != -1) {
+                const DSPNode* node = engine_.graph().find_node(dest_node_id);
+                if (node && (node->routing_type == NodeRoutingType::Mixer || node->routing_type == NodeRoutingType::MergeSum)) {
+                    if (node->input_pin_ids.size() > 2) {
+                        for (size_t i = 0; i < node->input_pin_ids.size(); ++i) {
+                            if (node->input_pin_ids[i] == link.dest_pin_id) {
+                                auto_removed_pin_index = i;
+                                auto_removed_pin_gain = node->input_gains[i];
+                                break;
+                            }
+                        }
+                        if (engine_.graph().remove_input_pin(dest_node_id, link.dest_pin_id)) {
+                            auto_removed_pin_node_id = dest_node_id;
+                            auto_removed_pin_id = link.dest_pin_id;
+                        }
+                    }
+                }
+            }
             engine_.commit_graph_changes();
         }
         return success;
     }
 
     void undo() override {
+        if (auto_removed_pin_node_id != -1) {
+            engine_.graph().restore_input_pin(auto_removed_pin_node_id, auto_removed_pin_id, auto_removed_pin_index, auto_removed_pin_gain);
+        }
         engine_.graph().restore_link(link);
         engine_.commit_graph_changes();
     }

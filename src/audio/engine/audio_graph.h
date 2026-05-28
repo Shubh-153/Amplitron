@@ -66,8 +66,9 @@ public:
 
   // Dynamic Mixer API
   bool add_input_pin(int node_id);
-  bool remove_input_pin(int node_id);
+  bool remove_input_pin(int node_id, int pin_id = -1);
   void set_mixer_input_gain(int node_id, size_t pin_index, float gain);
+  void restore_input_pin(int node_id, int pin_id, int index, float gain);
 
   // Accessors
   const std::vector<int> &get_sorted_nodes() const { return sorted_node_ids_; }

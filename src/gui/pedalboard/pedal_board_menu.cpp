@@ -107,13 +107,8 @@ void PedalBoard::render_add_pedal_menu() {
         if (ImGui::MenuItem("+ Signal Splitter Node (1 In -> 2 Out)")) {
             history_.execute(std::make_unique<AddGraphNodeCommand>(engine_, "Splitter", NodeRoutingType::Splitter, nullptr, ImVec2(0, 0)));
         }
-        if (ImGui::BeginMenu("+ Signal Mixer Node (N-In -> 1 Out)")) {
-            for (int i = 2; i <= 8; ++i) {
-                if (ImGui::MenuItem((std::to_string(i) + " Inputs").c_str())) {
-                    history_.execute(std::make_unique<AddGraphNodeCommand>(engine_, "Mixer", NodeRoutingType::Mixer, nullptr, ImVec2(0, 0), i));
-                }
-            }
-            ImGui::EndMenu();
+        if (ImGui::MenuItem("+ Signal Mixer Node (N-In -> 1 Out)")) {
+            history_.execute(std::make_unique<AddGraphNodeCommand>(engine_, "Mixer", NodeRoutingType::Mixer, nullptr, ImVec2(0, 0), 2));
         }
 
         ImGui::EndPopup();

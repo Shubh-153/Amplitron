@@ -61,6 +61,8 @@ void PedalBoard::render_signal_chain() {
   }
 
   ImGui::SetNextItemAllowOverlap();
+  if (canvas_size.x <= 0.0f) canvas_size.x = 1.0f;
+  if (canvas_size.y <= 0.0f) canvas_size.y = 1.0f;
   ImGui::InvisibleButton("canvas_panning_hotspot", canvas_size, btn_flags);
   // Update canvas_hovered here — after InvisibleButton — so it reflects the
   // actual canvas item
