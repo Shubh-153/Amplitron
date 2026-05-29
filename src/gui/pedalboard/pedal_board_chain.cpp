@@ -215,6 +215,11 @@ void PedalBoard::render_signal_chain() {
       node_height =
           std::max(70.0f, (float)node.input_pin_ids.size() * 32.0f + 55.0f) *
           ui_state.zoom;
+    } else if (!target_widget && node.routing_type == NodeRoutingType::Splitter) {
+      node_width = 130.0f * ui_state.zoom;
+      node_height =
+          std::max(70.0f, (float)node.output_pin_ids.size() * 32.0f + 55.0f) *
+          ui_state.zoom;
     }
     ImGui::PushID(node.id);
     if (target_widget) {
