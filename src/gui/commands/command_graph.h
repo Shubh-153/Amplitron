@@ -192,7 +192,7 @@ struct AddGraphLinkCommand : public Command {
                 if (dest_node_id != -1) {
                     const DSPNode* node = engine_.graph().find_node(dest_node_id);
                     if (node && (node->routing_type == NodeRoutingType::Mixer || node->routing_type == NodeRoutingType::MergeSum)) {
-                        int occupied_count = 0;
+                        size_t occupied_count = 0;
                         for (int p : node->input_pin_ids) {
                             for (const auto& l : engine_.graph().get_links()) {
                                 if (l.dest_pin_id == p) {
@@ -218,7 +218,7 @@ struct AddGraphLinkCommand : public Command {
                 if (source_node_id != -1) {
                     const DSPNode* node = engine_.graph().find_node(source_node_id);
                     if (node && node->routing_type == NodeRoutingType::Splitter) {
-                        int occupied_count = 0;
+                        size_t occupied_count = 0;
                         for (int p : node->output_pin_ids) {
                             for (const auto& l : engine_.graph().get_links()) {
                                 if (l.source_pin_id == p) {
