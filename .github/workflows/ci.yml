@@ -44,7 +44,8 @@ jobs:
 
       - name: Setup External Dependencies
         run: |
-          bash ./scripts/setup_dependencies.sh
+          chmod +x scripts/setup_dependencies.sh
+          ./scripts/setup_dependencies.sh --no-system-deps
 
       - name: Generate Version
         id: version
@@ -138,7 +139,8 @@ jobs:
 
       - name: Setup External Dependencies
         run: |
-          bash ./scripts/setup_dependencies.sh
+          chmod +x scripts/setup_dependencies.sh
+          ./scripts/setup_dependencies.sh --no-system-deps
 
       - name: Generate Version
         id: version
@@ -329,7 +331,8 @@ jobs:
 
       - name: Setup External Dependencies
         run: |
-          bash ./scripts/setup_dependencies.sh
+          chmod +x scripts/setup_dependencies.sh
+          ./scripts/setup_dependencies.sh --no-system-deps
 
       - name: Generate Version
         id: version
@@ -440,7 +443,8 @@ jobs:
       - name: Setup External Dependencies
         shell: msys2 {0}
         run: |
-          bash ./scripts/setup_dependencies.sh
+          chmod +x scripts/setup_dependencies.sh
+          ./scripts/setup_dependencies.sh --no-system-deps
 
       - name: Generate Version
         shell: msys2 {0}
@@ -578,7 +582,8 @@ jobs:
 
       - name: Setup External Dependencies
         run: |
-          bash ./scripts/setup_dependencies.sh
+          chmod +x scripts/setup_dependencies.sh
+          ./scripts/setup_dependencies.sh --no-system-deps
 
       - name: Fetch SDL2 Java bridge
         run: |
@@ -633,7 +638,8 @@ jobs:
 
       - name: Setup External Dependencies
         run: |
-          bash ./scripts/setup_dependencies.sh
+          chmod +x scripts/setup_dependencies.sh
+          ./scripts/setup_dependencies.sh --no-system-deps
 
       - name: Generate Version
         id: version
