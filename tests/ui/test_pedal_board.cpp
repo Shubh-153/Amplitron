@@ -311,7 +311,6 @@ TEST(pedal_widget_body_and_knob_adjustments) {
     widget.set_gui_midi(&gui_midi);
 
     // Call individual rendering helpers in PedalWidget
-    ImGui::NewFrame();
     ImGui::Begin("Test");
     ImDrawList* dl = ImGui::GetWindowDrawList();
     widget.render_standard_pedal(dl, ImVec2(0, 0), ImVec2(200, 300), 200.0f, true, 1.0f);
@@ -364,7 +363,6 @@ TEST(pedal_widget_body_and_knob_adjustments) {
     ScreenComponent::render(dl, ImVec2(0,0), 200.0f, 1.0f, props);
 
     ImGui::End();
-    ImGui::EndFrame();
 
     engine.shutdown();
 }
